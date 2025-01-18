@@ -17,7 +17,7 @@
 #include <QJsonArray>
 #include <QJsonValue>
 #include <unordered_map>
-
+using namespace std;
 
 
 QT_BEGIN_NAMESPACE
@@ -34,13 +34,15 @@ public:
 
 private:
     Ui::MainWindow *ui;
-    QStandardItemModel *chat_model;  // 用來儲存訊息的模型
+    //QStandardItemModel *chat_model;
+    QString myid;
+    QMap<QString, QStandardItemModel*> chat_models; // 用來儲存訊息的模型
     QStandardItemModel *contact_model;
-    std::unordered_map<int, std::string> current_contacts;
+    QMap<QString, QString> current_contacts;
     QTcpSocket *socket;
     QString getSelectedRowId();
-    void addMessage(const QString &message, const QString &avatarPath, const QString type);
-
+    void sendMessage(const QString &message, const QString &avatarPath, const QString type, QString to);
+    void recvMessage(const QString &message, const QString &avatarPath, const QString type, QString from);
 
 private slots:
     void on_msg_received();  // 槽函數

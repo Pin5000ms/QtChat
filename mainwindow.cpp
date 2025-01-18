@@ -8,7 +8,6 @@
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
     , ui(new Ui::MainWindow)
-    , chat_model(new QStandardItemModel(this))
     , contact_model(new QStandardItemModel(this))
     , socket(new QTcpSocket())
 {
@@ -47,21 +46,22 @@ MainWindow::MainWindow(QWidget *parent)
     // 發送數據到伺服器
     connect(ui->sendButton, &QPushButton::clicked, this, [=]() {
 
-        QString id = getSelectedRowId();
+        QString dst = getSelectedRowId();
 
         QJsonObject json;
         json["type"] = "msg";  // 類型為msg
+        json["from"] = myid;
         json["content"] = ui->msgEdit->toPlainText();//訊息內容
-        json["dst"] = id; //發送到目的client
+        json["to"] = dst; //發送到目的client
 
 
-        if (socket->state() == QAbstractSocket::ConnectedState && !id.isEmpty()) {
+        if (socket->state() == QAbstractSocket::ConnectedState && !myid.isEmpty()) {
             // 將 JSON 對象轉為byte array
             QJsonDocument doc(json);
             QByteArray jsonData = doc.toJson(QJsonDocument::Compact);
             socket->write(jsonData);
 
-            addMessage(ui->msgEdit->toPlainText(), ":/icon/avatar.png", "sent");
+            sendMessage(ui->msgEdit->toPlainText(), ":/icon/avatar.png", "sent", dst);
         } else {
             qDebug() << "Not connected to server!";
         }
@@ -73,11 +73,11 @@ MainWindow::MainWindow(QWidget *parent)
     ui->chatroom->setItemDelegate(delegate);
 
     // 設置 QListView 的模型
-    ui->chatroom->setModel(chat_model);
+    //ui->chatroom->setModel(chat_model);
     ui->chatroom->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
-    ui->chatroom->setStyleSheet("QListView::item { height: 50px; }");
 
     connect(socket, &QTcpSocket::readyRead, this, &MainWindow::on_msg_received);
+
 
 
     ui->contacts->setModel(contact_model);
@@ -87,96 +87,110 @@ MainWindow::MainWindow(QWidget *parent)
 
 void MainWindow::on_msg_received()
 {
-    // 从 socket 中读取所有可用的数据
+    // 從 socket 讀取所有可用的數據
     QByteArray message = socket->readAll();
     qDebug() << "Received message:" << message;
 
-    // 解析 JSON 数据
+    // 解析 JSON 數據
     QJsonDocument jsonDoc = QJsonDocument::fromJson(message);
     if (jsonDoc.isNull()) {
         qDebug() << "Failed to create JSON doc.";
         return;
     }
 
-    // 检查 JSON 是否是对象
+    // 檢查 JSON 是否為對象
     if (!jsonDoc.isObject()) {
         qDebug() << "JSON is not an object.";
         return;
     }
 
-    // 获取 JSON 对象
+    // 取得 JSON 對象
     QJsonObject jsonObj = jsonDoc.object();
 
-    // 访问 JSON 数据
+    // 存取 JSON 數據
     QString type = jsonObj["type"].toString();
     qDebug() << "Parsed type:" << type;
 
     if (type == "contacts") {
         QJsonArray contactsArray = jsonObj["content"].toArray();
-        for (const QJsonValue &value : contactsArray) {
+        for (const QJsonValue &value : contactsArray)
+        {
             QJsonObject contactObj = value.toObject();
-            int id = contactObj["id"].toInt();
-            std::string name = contactObj["name"].toString().toStdString();
 
-            if(current_contacts.find(id) == current_contacts.end()){
-                current_contacts[id] = name;
-                std::string combined = "#" + std::to_string(id) + ":" + name;
-                QStandardItem *newItem = new QStandardItem(QString::fromStdString(combined));
+            int id = contactObj["id"].toInt();
+            QString qid = QString::number(id);
+            QString name = contactObj["name"].toString();
+
+            if(current_contacts.find(qid) == current_contacts.end())
+            {
+                current_contacts[qid] = name;
+                QString combined = "#" + qid + ":" + name;
+                QStandardItem *newItem = new QStandardItem(combined);
                 contact_model->appendRow(newItem);
+
+                if(!chat_models.contains(qid))
+                {
+                    chat_models.insert(qid, new QStandardItemModel(this));
+                }
             }
+        }
+
+        myid = jsonObj["getid"].toString();//更新自己的ID
+        if(!chat_models.contains(myid)){
+            chat_models.insert(myid, new QStandardItemModel(this));
+            ui->chatroom->setModel(chat_models[myid]);
         }
     }
     else if(type == "msg"){
+        QString from = jsonObj["from"].toString();
         QString message = jsonObj["content"].toString();
-        addMessage(message, ":/icon/avatar.png", "receive");
+        recvMessage(message, ":/icon/avatar.png", "receive", from);
     }
 }
+
+
 
 QString MainWindow::getSelectedRowId()
 {
-    // 获取 QListView 的选择模型
-    QItemSelectionModel *selectionModel = ui->contacts->selectionModel();
+     // 取得 QListView 的選擇模型
+     QItemSelectionModel *selectionModel = ui->contacts->selectionModel();
 
-    // 获取当前选中的索引
-    QModelIndexList selectedIndexes = selectionModel->selectedIndexes();
+     // 取得目前選取的索引
+     QModelIndexList selectedIndexes = selectionModel->selectedIndexes();
 
-    // 检查是否有选中的项
-    if (!selectedIndexes.isEmpty()) {
-        // 获取第一个选中的索引
-        QModelIndex index = selectedIndexes.first();
+     // 檢查是否有選取的項
+     if (!selectedIndexes.isEmpty()) {
+         // 取得第一個選取的索引
+         QModelIndex index = selectedIndexes.first();
 
-        // 获取选中行的内容
-        QString selectedText = index.data(Qt::DisplayRole).toString();
+         // 取得選取行的內容
+         QString selectedText = index.data(Qt::DisplayRole).toString();
 
-        // 输出选中的内容
-        qDebug() << "Selected Row Content:" << selectedText;
+         // 輸出選取的內容
+         qDebug() << "Selected Row Content:" << selectedText;
 
-        // 提取 id
-        if (selectedText.startsWith("#")) {
-            // 去掉开头的 '#'
-            QStringList parts = selectedText.mid(1).split(':'); // 分割字符串
-            if (parts.size() == 2) {
-                QString idString = parts[0]; // 提取 id
-                QString name = parts[1]; // 提取 name
-                std::string id = idString.toStdString(); // 转换为 int，ok 用于检查转换是否成功
-                return idString; // 返回 id
-
-            } else {
-                qDebug() << "Invalid format. Expected #id:name.";
-                return ""; // 返回错误值
-            }
-        } else {
-            qDebug() << "String does not start with '#'.";
-            return ""; // 返回错误值
-        }
-    } else {
+         // 提取 id
+         if (selectedText.startsWith("#")) {
+             // 去掉開頭的 '#'
+             QStringList parts = selectedText.mid(1).split(':'); // 分割字串
+             QString idString = parts[0]; // 擷取 id
+             return idString;
+         }
+         else {
+             qDebug() << "String does not start with '#'.";
+             return ""; // 傳回錯誤值
+         }
+     }
+     else {
         qDebug() << "No row selected.";
-        return ""; // 返回错误值
-    }
+        return ""; // 傳回錯誤值
+     }
 }
 
-void MainWindow::addMessage(const QString &message, const QString &avatarPath, const QString type)
+void MainWindow::sendMessage(const QString &message, const QString &avatarPath, const QString type, QString to)
 {
+    ui->current_contact->setText( "#" + to + current_contacts[to] ); //標籤更新成聊天對象名稱
+
     // 設置自定義角色值
     QStandardItem *item = new QStandardItem();
 
@@ -184,11 +198,33 @@ void MainWindow::addMessage(const QString &message, const QString &avatarPath, c
     item->setData(QPixmap(avatarPath), Qt::DecorationRole);  // 設置頭像
     item->setData(type, MessageDelegate::MessageTypeRole);  // 設置消息類型：sent 或 received
 
+    ui->chatroom->setModel(chat_models[to]);
     // 添加到模型中
-    chat_model->appendRow(item);
+    chat_models[to]->appendRow(item);
 
     // 自動滾動到底部
-    ui->chatroom->scrollTo(chat_model->index(chat_model->rowCount() - 1, 0), QAbstractItemView::PositionAtBottom);
+    ui->chatroom->scrollTo(chat_models[to]->index(chat_models[to]->rowCount() - 1, 0), QAbstractItemView::PositionAtBottom);
+}
+
+void MainWindow::recvMessage(const QString &message, const QString &avatarPath, const QString type, QString from)
+{
+    ui->current_contact->setText( "#" + from + current_contacts[from] );//標籤更新成聊天對象名稱
+
+
+    // 設置自定義角色值
+    QStandardItem *item = new QStandardItem();
+
+    item->setData(message, Qt::DisplayRole);    // 設置消息內容
+    item->setData(QPixmap(avatarPath), Qt::DecorationRole);  // 設置頭像
+    item->setData(type, MessageDelegate::MessageTypeRole);  // 設置消息類型：sent 或 received
+
+
+    ui->chatroom->setModel(chat_models[from]);
+
+    chat_models[from]->appendRow(item);
+
+    // 自動滾動到底部
+    ui->chatroom->scrollTo(chat_models[from]->index(chat_models[from]->rowCount() - 1, 0), QAbstractItemView::PositionAtBottom);
 }
 
 
