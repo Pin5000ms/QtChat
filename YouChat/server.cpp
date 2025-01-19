@@ -40,7 +40,7 @@ void server103()
     // 客戶端地址結構的大小
     socklen_t clnt_sz;
     // 用於儲存接收到的數據的緩衝區
-    char buf[512] = "";
+    char buf[1024 * 1024] = "";
     // 創建TCP socket
     serv_sock = socket(PF_INET, SOCK_STREAM, 0);
 
@@ -125,7 +125,8 @@ void server103()
             {
                 while (true)
                 {
-                    // 讀取客戶端發送的數據
+                    memset(buf, 0, sizeof(buf)); // 清空 buf
+                    //  讀取客戶端發送的數據
                     ssize_t len = read(all_events[i].data.fd, buf, sizeof(buf));
                     if (len < 0)
                     {

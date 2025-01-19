@@ -21,9 +21,15 @@ void Responser::process(int client, char *buf)
     Json::Value parsedRoot;
     string errors;
 
-    istringstream s(buf); // 将 buf 转换为输入流
-
-    if (Json::parseFromStream(reader, s, &parsedRoot, &errors))
+    istringstream s(buf); // 將 buf 轉換成輸入流
+    bool success = Json::parseFromStream(reader, s, &parsedRoot, &errors);
+    if (!success)
+    {
+        std::cerr << "JSON parse error: " << errors << std::endl;
+        std::cerr << "Received data: " << buf << std::endl; // 打印接收到的數據
+        return;
+    }
+    else if (success)
     {
         string type = parsedRoot["type"].asString();
         string content = parsedRoot["content"].asString();
@@ -52,11 +58,11 @@ void Responser::process(int client, char *buf)
                         response["content"].append(contact);
                     }
                 }
-                // 将 JSON 对象转换为字符串
+                // 將JSON對象轉為字串
                 Json::StreamWriterBuilder writer;
                 std::string jsonString = Json::writeString(writer, response);
 
-                // 发送 JSON 字符串
+                // 發送JSON字串
                 write(clnt_socks[j], jsonString.c_str(), jsonString.size());
             }
         }
@@ -70,17 +76,78 @@ void Responser::process(int client, char *buf)
             response["type"] = "msg";
             response["content"] = content;
 
-            // 将 JSON 对象转换为字符串
+            // 將JSON對象轉為字串
             Json::StreamWriterBuilder writer;
             std::string jsonString = Json::writeString(writer, response);
 
             write(target_sock, jsonString.c_str(), jsonString.size());
+        }
+        else if (type == "file_chunk")
+        {
+            std::string filename = parsedRoot["file_name"].asString();
+            int64_t file_size = parsedRoot["file_size"].asInt64();
+            std::string chunkContent = parsedRoot["content"].asString();
+            int64_t offset = parsedRoot["offset"].asInt64();
+            std::string target_sock_str = parsedRoot["to"].asString();
+            std::string source_sock_str = parsedRoot["from"].asString();
+            int target_sock = std::stoi(target_sock_str);
+            int source_sock = std::stoi(source_sock_str);
+
+            // 儲存檔案區塊到緩衝區
+            // enqueueFileChunk(target_sock, chunkContent);
+            sendFileChunkToClient(target_sock, filename, chunkContent);
+
+            // 發送回應
+            Json::Value response;
+            response["type"] = "file_chunk_ack";
+            // response["file_name"] = filename;
+            response["offset"] = offset + chunkContent.size();
+            Json::StreamWriterBuilder writer;
+            std::string jsonString = Json::writeString(writer, response);
+            write(source_sock, jsonString.c_str(), jsonString.size()); // 回應發送端
         }
     }
     else
     {
         return;
     }
+}
+
+void Responser::enqueueFileChunk(int clientSock, const std::string &chunk)
+{
+    std::lock_guard<std::mutex> lock(queueMutex);
+    fileChunksQueue.push({clientSock, chunk});
+    queueCondVar.notify_one();
+}
+
+// 這個函式會運行在獨立的線程中，持續將 queue 中的區塊發送給目標客戶端
+void Responser::processFileChunks()
+{
+    while (true)
+    {
+        std::unique_lock<std::mutex> lock(queueMutex);
+        queueCondVar.wait(lock, [this]
+                          { return !fileChunksQueue.empty(); });
+
+        auto [clientSock, chunk] = fileChunksQueue.front();
+        fileChunksQueue.pop();
+        lock.unlock();
+
+        // 這裡進行檔案區塊的發送
+        sendFileChunkToClient(clientSock, chunk, "");
+    }
+}
+
+void Responser::sendFileChunkToClient(int target_sock, const std::string filename, const std::string &chunk)
+{
+    Json::Value response;
+    response["type"] = "file_chunk";
+    response["file_name"] = filename;
+    response["content"] = chunk;
+
+    Json::StreamWriterBuilder writer;
+    std::string jsonString = Json::writeString(writer, response);
+    write(target_sock, jsonString.c_str(), jsonString.size()); // 發送區塊至目標客戶端
 }
 
 Responser::Responser(/* args */)

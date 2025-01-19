@@ -300,7 +300,7 @@ void MainWindow::sendFileToServer(const QString &filePath) {
 
         if (file.open(QIODevice::ReadOnly)) {
             qint64 offset = 0;
-            const int chunkSize = 1024; // 每個區塊1KB
+            const int chunkSize = 2*1024; // 每個區塊1KB
             while (offset < fileSize) {
                 QByteArray chunk = file.read(chunkSize); // 讀取檔案塊
                 QByteArray encodedChunk = chunk.toBase64(); // 編碼區塊為Base64
