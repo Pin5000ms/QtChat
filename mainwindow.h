@@ -54,14 +54,16 @@ private:
     void sendMessage(const QString &message, const QString &avatarPath, const QString type, QString to);
     void recvMessage(const QString &message, const QString &avatarPath, const QString type, QString from);
 
-    void setupDragAndDrop();
-    void dragEnterEvent(QDragEnterEvent *event);
-    void dropEvent(QDropEvent *event);
+    //void setupDragAndDrop();
+    //void dragEnterEvent(QDragEnterEvent *event);
+    //void dropEvent(QDropEvent *event);
     void onSendFileButtonClicked();
     void sendFileToServer(const QString &filePath);
     bool ack = false;
 
 private slots:
     void on_received();  // 槽函數
+    void on_sended();  // 槽函數
+    void onContactsClicked();  // 槽函數
 };
 #endif // MAINWINDOW_H

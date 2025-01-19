@@ -1,9 +1,7 @@
 #ifndef MESSAGEDELEGATE_H
 #define MESSAGEDELEGATE_H
-
 #include <QStyledItemDelegate>
 #include <QPainter>
-
 class MessageDelegate : public QStyledItemDelegate
 {
     Q_OBJECT

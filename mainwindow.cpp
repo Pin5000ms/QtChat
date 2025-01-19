@@ -1,7 +1,7 @@
 #include "mainwindow.h"
 #include "ui_mainwindow.h"
 #include "MessageDelegate.h"
-
+#include "ContactsDelegate.h"
 
 
 
@@ -44,49 +44,32 @@ MainWindow::MainWindow(QWidget *parent)
     qDebug()<<socket;
 
 
-    // 發送訊息到伺服器
-    connect(ui->sendButton, &QPushButton::clicked, this, [=]() {
+    // 發送按鈕點擊事件
+    connect(ui->sendButton, &QPushButton::clicked, this, &MainWindow::on_sended);
 
-        QString tmpdst = getSelectedRowId();
-        if(tmpdst != "")//如果有選擇傳送對象，更新dst
-            dst = tmpdst;
-
-        QJsonObject json;
-        json["type"] = "msg";  // 類型為msg
-        json["from"] = myid;
-        json["content"] = ui->msgEdit->toPlainText();//訊息內容
-        json["to"] = dst; //發送到目的client
-
-
-        if (socket->state() == QAbstractSocket::ConnectedState && !myid.isEmpty()) {
-            // 將 JSON 對象轉為byte array
-            QJsonDocument doc(json);
-            QByteArray jsonData = doc.toJson(QJsonDocument::Compact);
-            socket->write(jsonData);
-
-            sendMessage(ui->msgEdit->toPlainText(), ":/icon/avatar.png", "sent", dst);
-        } else {
-            qDebug() << "Not connected to server!";
-        }
-
-    });
-
-    // 在主窗口中創建並設置自定義的委託
-    MessageDelegate *delegate = new MessageDelegate(this);
-    ui->chatroom->setItemDelegate(delegate);
-
-    // 設置 QListView 的模型
-    //ui->chatroom->setModel(chat_model);
-    ui->chatroom->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
-
+    // TCP接收事件
     connect(socket, &QTcpSocket::readyRead, this, &MainWindow::on_received);
 
+    //選擇聯絡人點擊事件
+    connect(ui->contacts, &QListView::clicked, this, &MainWindow::onContactsClicked);
+
+    //傳送檔案按鈕的點擊事件
+    connect(ui->sendFileButton, &QPushButton::clicked, this, &MainWindow::onSendFileButtonClicked);
 
 
+
+    // 在聊天室視窗中創建並設置自定義的委託
+    MessageDelegate *delegate = new MessageDelegate(this);
+    ui->chatroom->setItemDelegate(delegate);
+    ui->chatroom->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    //ui->chatroom->setModel(chat_model);// 設置 QListView 的模型
+
+
+    // 在聯絡人清單中創建並設置自定義的委託
+    ContactsDelegate *delegate2 = new ContactsDelegate(this);
+    ui->contacts->setItemDelegate(delegate2);
     ui->contacts->setModel(contact_model);
 
-    // 連接按鈕的點擊事件
-    connect(ui->sendFileButton, &QPushButton::clicked, this, &MainWindow::onSendFileButtonClicked);
 
 }
 
@@ -180,6 +163,30 @@ void MainWindow::on_received()
 }
 
 
+void MainWindow::on_sended(){
+    QString tmpdst = getSelectedRowId();
+    if(tmpdst != "")//如果有選擇傳送對象，更新dst
+        dst = tmpdst;
+
+    QJsonObject json;
+    json["type"] = "msg";  // 類型為msg
+    json["from"] = myid;
+    json["content"] = ui->msgEdit->toPlainText();//訊息內容
+    json["to"] = dst; //發送到目的client
+
+
+    if (socket->state() == QAbstractSocket::ConnectedState && !myid.isEmpty()) {
+        // 將 JSON 對象轉為byte array
+        QJsonDocument doc(json);
+        QByteArray jsonData = doc.toJson(QJsonDocument::Compact);
+        socket->write(jsonData);
+
+        sendMessage(ui->msgEdit->toPlainText(), ":/icon/avatar.png", "sent", dst);
+    } else {
+        qDebug() << "Not connected to server!";
+    }
+}
+
 
 QString MainWindow::getSelectedRowId()
 {
@@ -258,7 +265,7 @@ void MainWindow::recvMessage(const QString &message, const QString &avatarPath, 
     ui->chatroom->scrollTo(chat_models[from]->index(chat_models[from]->rowCount() - 1, 0), QAbstractItemView::PositionAtBottom);
 }
 
-
+/*
 void MainWindow::setupDragAndDrop() {
     ui->msgEdit->setAcceptDrops(true);
 }
@@ -279,9 +286,17 @@ void MainWindow::dropEvent(QDropEvent *event) {
         }
     }
 }
+*/
+
+//切換聊天室
+void MainWindow::onContactsClicked(){
+    dst = getSelectedRowId();
+    ui->chatroom->setModel(chat_models[dst]);
+    ui->current_contact->setText("#" + dst + current_contacts[dst]);
+}
 
 
-// 按鈕點擊時呼叫此槽函數
+// 點擊後傳輸檔案
 void MainWindow::onSendFileButtonClicked() {
     // 使用 QFileDialog 來選擇檔案
     QString filePath = QFileDialog::getOpenFileName(this, "Choose File", "", "All Files (*.*)");
@@ -291,6 +306,8 @@ void MainWindow::onSendFileButtonClicked() {
     }
 }
 
+
+// 傳輸檔案
 void MainWindow::sendFileToServer(const QString &filePath) {
     QtConcurrent::run([=]() {
         QFile file(filePath);

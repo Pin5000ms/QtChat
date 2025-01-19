@@ -74,7 +74,6 @@ void MessageDelegate::paint(QPainter *painter, const QStyleOptionViewItem &optio
 
 
 
-
     QRect bubbleRect = itemRect;//option.rect;
 
     int textWidth = calculateTextWidth(text);
