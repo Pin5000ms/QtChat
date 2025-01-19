@@ -17,12 +17,14 @@
 #include <QJsonArray>
 #include <QJsonValue>
 
+
 #include <QFile>
 #include <QFileInfo>
 #include <QDragEnterEvent>
 #include <QMimeData>
 #include <QFileDialog>
 #include <QThread>
+#include <QtConcurrent>
 
 using namespace std;
 
@@ -57,6 +59,7 @@ private:
     void dropEvent(QDropEvent *event);
     void onSendFileButtonClicked();
     void sendFileToServer(const QString &filePath);
+    bool ack = false;
 
 private slots:
     void on_received();  // 槽函數
