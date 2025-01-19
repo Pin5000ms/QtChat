@@ -16,7 +16,14 @@
 #include <QJsonObject>
 #include <QJsonArray>
 #include <QJsonValue>
-#include <unordered_map>
+
+#include <QFile>
+#include <QFileInfo>
+#include <QDragEnterEvent>
+#include <QMimeData>
+#include <QFileDialog>
+#include <QThread>
+
 using namespace std;
 
 
@@ -36,6 +43,7 @@ private:
     Ui::MainWindow *ui;
     //QStandardItemModel *chat_model;
     QString myid;
+    QString dst;
     QMap<QString, QStandardItemModel*> chat_models; // 用來儲存訊息的模型
     QStandardItemModel *contact_model;
     QMap<QString, QString> current_contacts;
@@ -44,7 +52,13 @@ private:
     void sendMessage(const QString &message, const QString &avatarPath, const QString type, QString to);
     void recvMessage(const QString &message, const QString &avatarPath, const QString type, QString from);
 
+    void setupDragAndDrop();
+    void dragEnterEvent(QDragEnterEvent *event);
+    void dropEvent(QDropEvent *event);
+    void onSendFileButtonClicked();
+    void sendFileToServer(const QString &filePath);
+
 private slots:
-    void on_msg_received();  // 槽函數
+    void on_received();  // 槽函數
 };
 #endif // MAINWINDOW_H

@@ -5,6 +5,7 @@
 
 
 
+
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
     , ui(new Ui::MainWindow)
@@ -43,10 +44,12 @@ MainWindow::MainWindow(QWidget *parent)
     qDebug()<<socket;
 
 
-    // 發送數據到伺服器
+    // 發送訊息到伺服器
     connect(ui->sendButton, &QPushButton::clicked, this, [=]() {
 
-        QString dst = getSelectedRowId();
+        QString tmpdst = getSelectedRowId();
+        if(tmpdst != "")//如果有選擇傳送對象，更新dst
+            dst = tmpdst;
 
         QJsonObject json;
         json["type"] = "msg";  // 類型為msg
@@ -76,16 +79,19 @@ MainWindow::MainWindow(QWidget *parent)
     //ui->chatroom->setModel(chat_model);
     ui->chatroom->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
 
-    connect(socket, &QTcpSocket::readyRead, this, &MainWindow::on_msg_received);
+    connect(socket, &QTcpSocket::readyRead, this, &MainWindow::on_received);
 
 
 
     ui->contacts->setModel(contact_model);
 
+    // 連接按鈕的點擊事件
+    connect(ui->sendFileButton, &QPushButton::clicked, this, &MainWindow::onSendFileButtonClicked);
+
 }
 
 
-void MainWindow::on_msg_received()
+void MainWindow::on_received()
 {
     // 從 socket 讀取所有可用的數據
     QByteArray message = socket->readAll();
@@ -144,7 +150,32 @@ void MainWindow::on_msg_received()
     else if(type == "msg"){
         QString from = jsonObj["from"].toString();
         QString message = jsonObj["content"].toString();
+        dst = from;//收到來自from的訊息後，自動把下次傳送對象設定為from
         recvMessage(message, ":/icon/avatar.png", "receive", from);
+    }
+    else if(type == "file_chunk"){
+        QString file_name = jsonObj["file_name"].toString();
+        QFile file(file_name);
+
+        // 嘗試以附加模式打開文件，不存在時自動創建
+        if (!file.open(QIODevice::Append | QIODevice::WriteOnly)) {
+            qWarning() << "Failed to open file for writing/appending:" << file_name;
+            return;
+        }
+
+        // 解碼從 server 接收到的 base64 塊
+        QByteArray decodedChunk = QByteArray::fromBase64(jsonObj["content"].toString().toUtf8());
+
+        // 寫入塊數據
+        qint64 bytesWritten = file.write(decodedChunk);
+        if (bytesWritten == -1) {
+            qWarning() << "Failed to write data to file:" << file_name;
+        }
+
+        file.close();
+    }
+    else if(type == "file_chunk_ack"){
+
     }
 }
 
@@ -225,6 +256,73 @@ void MainWindow::recvMessage(const QString &message, const QString &avatarPath, 
 
     // 自動滾動到底部
     ui->chatroom->scrollTo(chat_models[from]->index(chat_models[from]->rowCount() - 1, 0), QAbstractItemView::PositionAtBottom);
+}
+
+
+void MainWindow::setupDragAndDrop() {
+    ui->msgEdit->setAcceptDrops(true);
+}
+
+void MainWindow::dragEnterEvent(QDragEnterEvent *event) {
+    if (event->mimeData()->hasUrls()) {
+        event->acceptProposedAction();
+    }
+}
+
+void MainWindow::dropEvent(QDropEvent *event) {
+    const QMimeData *mimeData = event->mimeData();
+    if (mimeData->hasUrls()) {
+        QList<QUrl> urlList = mimeData->urls();
+        if (!urlList.isEmpty()) {
+            QString filePath = urlList.first().toLocalFile();
+            sendFileToServer(filePath);
+        }
+    }
+}
+
+
+// 按鈕點擊時呼叫此槽函數
+void MainWindow::onSendFileButtonClicked() {
+    // 使用 QFileDialog 來選擇檔案
+    QString filePath = QFileDialog::getOpenFileName(this, "Choose File", "", "All Files (*.*)");
+
+    if (!filePath.isEmpty()) {
+        sendFileToServer(filePath);  // 呼叫檔案傳送函數
+    }
+}
+
+void MainWindow::sendFileToServer(const QString &filePath) {
+    QFile file(filePath);
+    QFileInfo fileInfo(file);
+    qint64 fileSize = fileInfo.size();  // 取得文件大小
+    QString fileName = fileInfo.fileName();  // 取得檔案名稱
+
+    if (file.open(QIODevice::ReadOnly)) {
+        qint64 offset = 0;
+        const int chunkSize = 1024; // 每個區塊1KB
+        while (offset < fileSize) {
+            QByteArray chunk = file.read(chunkSize); // 讀取檔案塊
+            QByteArray encodedChunk = chunk.toBase64(); // 編碼區塊為Base64
+
+            QJsonObject json;
+            json["type"] = "file_chunk";
+            json["file_name"] = fileName;
+            json["file_size"] = fileSize;
+            dst = getSelectedRowId();
+            json["from"] = myid;
+            json["to"] = dst;
+            json["content"] = QString::fromUtf8(encodedChunk);
+            json["offset"] = offset;
+
+            QJsonDocument doc(json);
+            socket->write(doc.toJson(QJsonDocument::Compact));
+            socket->waitForBytesWritten();  // 等待檔案區塊發送完畢
+
+            offset += chunkSize;
+            QThread::msleep(100);
+        }
+        file.close();
+    }
 }
 
 
