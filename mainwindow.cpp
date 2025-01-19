@@ -171,8 +171,9 @@ void MainWindow::on_sended(){
     QJsonObject json;
     json["type"] = "msg";  // 類型為msg
     json["from"] = myid;
-    json["content"] = ui->msgEdit->toPlainText();//訊息內容
     json["to"] = dst; //發送到目的client
+    json["content"] = ui->msgEdit->toPlainText();//訊息內容
+
 
 
     if (socket->state() == QAbstractSocket::ConnectedState && !myid.isEmpty()) {
@@ -291,7 +292,7 @@ void MainWindow::dropEvent(QDropEvent *event) {
 //切換聊天室
 void MainWindow::onContactsClicked(){
     dst = getSelectedRowId();
-    ui->chatroom->setModel(chat_models[dst]);
+    ui->chatroom->setModel(chat_models[dst]);//切換聊天室
     ui->current_contact->setText("#" + dst + current_contacts[dst]);
 }
 
