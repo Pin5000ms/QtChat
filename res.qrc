@@ -2,5 +2,6 @@
     <qresource prefix="/icon">
         <file>chat.png</file>
         <file>avatar.png</file>
+        <file>file.png</file>
     </qresource>
 </RCC>

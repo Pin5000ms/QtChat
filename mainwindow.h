@@ -16,6 +16,7 @@
 #include <QJsonObject>
 #include <QJsonArray>
 #include <QJsonValue>
+#include <QMessageBox>
 
 
 #include <QFile>
@@ -51,15 +52,20 @@ private:
     QMap<QString, QString> current_contacts;
     QTcpSocket *socket;
     QString getSelectedRowId();
-    void sendMessage(const QString &message, const QString &avatarPath, const QString type, QString to);
-    void recvMessage(const QString &message, const QString &avatarPath, const QString type, QString from);
+    void sendMessage(const QString &message, const QString &avatarPath, const QString type, const QString datatype, QString to);
+    void recvMessage(const QString &message, const QString &avatarPath, const QString type, const QString datatype, QString from);
 
     //void setupDragAndDrop();
     //void dragEnterEvent(QDragEnterEvent *event);
     //void dropEvent(QDropEvent *event);
     void onSendFileButtonClicked();
     void sendFileToServer(const QString &filePath);
-    bool ack = false;
+    void recvFileFromServer(const QByteArray &byteArray);
+    bool filesendmode = false;
+    bool filereceivemode = false;
+    int file_size = 0;
+    int offset = 0;
+    QString recv_file_name;
 
 private slots:
     void on_received();  // 槽函數

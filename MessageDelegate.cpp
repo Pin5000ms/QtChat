@@ -56,12 +56,13 @@ void drawWrappedText(QPainter *painter, const QRect &textRect, const QString &te
 
 void MessageDelegate::paint(QPainter *painter, const QStyleOptionViewItem &option, const QModelIndex &index) const
 {
-
     // 根據自定義角色判斷消息類型
-    QString messageType = index.data(MessageTypeRole).toString();
+    QString messageType = index.data(DirectionTypeRole).toString();// sent or receive
     // 獲取消息內容和頭像
     QString text = index.data(Qt::DisplayRole).toString();
     QPixmap avatar = index.data(Qt::DecorationRole).value<QPixmap>();
+
+    QString dataType = index.data(DataTypeRole).toString();
 
 
 
@@ -76,28 +77,47 @@ void MessageDelegate::paint(QPainter *painter, const QStyleOptionViewItem &optio
 
     QRect bubbleRect = itemRect;//option.rect;
 
-    int textWidth = calculateTextWidth(text);
 
+    if(dataType == "text"){
+        int textWidth = calculateTextWidth(text);
+        // 設定範圍
+        if(messageType == "sent"){
+            int origin = itemRect.right() - AVATARW;
+            bubbleRect.setRight(origin);
 
-    // 設定範圍
-    if(messageType == "sent"){
-        int origin = itemRect.right() - AVATARW;
-        bubbleRect.setRight(origin);
+            if(textWidth < itemRect.width()*0.8)
+                bubbleRect.setLeft(origin - textWidth - 10);
+            else
+                bubbleRect.setLeft(itemRect.center().x() + 10);
+        }
+        else if (messageType == "receive"){
+            int origin = itemRect.left() + AVATARW + 10;
+            bubbleRect.setLeft(origin);
 
-        if(textWidth < itemRect.width()*0.8)
-            bubbleRect.setLeft(origin - textWidth - 10);
-        else
-            bubbleRect.setLeft(itemRect.center().x() + 10);
+            if(textWidth < itemRect.width()*0.8)
+                bubbleRect.setRight(origin + textWidth + 10);
+            else
+                bubbleRect.setRight(itemRect.center().x() - 10);
+        }
     }
-    else{
-        int origin = itemRect.left() + AVATARW + 10;
-        bubbleRect.setLeft(origin);
+    else if(dataType == "file"){
+        const int fileIconWidth = 80;
+        QPixmap filePixmap(":/icon/file.png");
+        if(messageType == "sent"){
+            int origin = itemRect.right() - AVATARW;
+            bubbleRect.setRight(origin);
+            bubbleRect.setLeft(origin - fileIconWidth - 10);
+        }
+        else if (messageType == "receive"){
+            int origin = itemRect.left() + AVATARW + 10;
+            bubbleRect.setLeft(origin);
+            bubbleRect.setRight(origin + fileIconWidth + 10);
+            //如何在下方新增 接收 取消 兩個按鈕?
+        }
+        painter->drawPixmap(bubbleRect, filePixmap);
 
-        if(textWidth < itemRect.width()*0.8)
-            bubbleRect.setRight(origin + textWidth + 10);
-        else
-            bubbleRect.setRight(itemRect.center().x() - 10);
     }
+
 
 
     // 根據消息類型設置不同底色
@@ -111,12 +131,16 @@ void MessageDelegate::paint(QPainter *painter, const QStyleOptionViewItem &optio
     painter->fillPath(path, backgroundColor); // 填充背景顏色
 
 
-    //margin
-    QRect textRect = bubbleRect;//option.rect;
-    textRect.setLeft(bubbleRect.left() + 10);
-    textRect.setTop(bubbleRect.top() + 10);
+    if(dataType == "text"){
 
-    drawWrappedText(painter, textRect, text);
+        //margin
+        QRect textRect = bubbleRect;//option.rect;
+        textRect.setLeft(bubbleRect.left() + 10);
+        textRect.setTop(bubbleRect.top() + 10);
+
+        drawWrappedText(painter, textRect, text);
+    }
+
 
 
     // 根據消息類型決定頭像的位置
@@ -154,6 +178,10 @@ QSize MessageDelegate::sizeHint(const QStyleOptionViewItem &option, const QModel
 {
     QString text = index.data(Qt::DisplayRole).toString();
 
+    QString dataType = index.data(DataTypeRole).toString();
+    if(dataType == "file"){
+        return QSize(option.rect.width(), 100);
+    }
     // 根據每行30個字元來計算所需行數
     int requiredLines = getRequiredLines(text);
 

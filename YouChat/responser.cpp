@@ -87,24 +87,38 @@ void Responser::process(int client, char *buf)
         {
             offset = 0;
             file_size = 0;
-            std::string filename = parsedRoot["file_name"].asString();
+            file_name = parsedRoot["file_name"].asString();
             file_size = parsedRoot["file_size"].asInt64();
 
             std::string target_sock_str = parsedRoot["to"].asString();
             std::string source_sock_str = parsedRoot["from"].asString();
-            int target_sock = std::stoi(target_sock_str);
-            int source_sock = std::stoi(source_sock_str);
+            if (target_sock_str != "")
+            {
+                file_dst = std::stoi(target_sock_str);
+            }
+
+            file_src = std::stoi(source_sock_str);
 
             // 發送回應
             Json::Value response;
             response["type"] = "file_ack";
             Json::StreamWriterBuilder writer;
             std::string jsonString = Json::writeString(writer, response);
-            write(source_sock, jsonString.c_str(), jsonString.size()); // 回應發送端
+            write(file_src, jsonString.c_str(), jsonString.size()); // 回應發送端
 
-            receive_file_src = source_sock;
-            receive_file_name = filename;
             filetranfermode = true;
+        }
+        else if (type == "file_recv_ack")
+        {
+            file_size = parsedRoot["file_size"].asInt64();
+            std::string file_name = parsedRoot["file_name"].asString();
+            std::string source_sock_str = parsedRoot["from"].asString();
+            int source_sock = std::stoi(source_sock_str);
+
+            std::cout << "File " << file_name << "start sent to socket " << source_sock << std::endl;
+            std::thread t1([this, source_sock, file_name]()
+                           { this->sendFile(source_sock, file_name); });
+            t1.detach();
         }
     }
     else
@@ -113,13 +127,37 @@ void Responser::process(int client, char *buf)
     }
 }
 
+void Responser::sendFile(int source_sock, string file_name)
+{
+    std::ifstream inFile(file_name, std::ios::binary);
+    if (!inFile)
+    {
+        std::cerr << "Failed to open file: " << file_name << std::endl;
+        return;
+    }
+
+    // 讀取檔案並發送給source_sock
+    char buffer[256 * 1024];
+    while (inFile.read(buffer, sizeof(buffer)) || inFile.gcount() > 0)
+    {
+        ssize_t bytesSent = send(source_sock, buffer, inFile.gcount(), 0);
+        if (bytesSent < 0)
+        {
+            std::cerr << "Failed to send file data to socket: " << source_sock << std::endl;
+            break;
+        }
+    }
+    inFile.close();
+    std::cout << "File " << file_name << "success sent to socket " << source_sock << std::endl;
+}
+
 void Responser::receiveFile(ssize_t bytesRead, char *buf)
 {
     // 創建本地文件
-    std::ofstream outFile(receive_file_name, std::ios::app | std::ios::binary);
+    std::ofstream outFile(file_name, std::ios::app | std::ios::binary);
     if (!outFile)
     {
-        std::cerr << "Failed to create file: " << receive_file_name << std::endl;
+        std::cerr << "Failed to create file: " << file_name << std::endl;
         return;
     }
     // 接收數據並寫入文件
@@ -134,7 +172,17 @@ void Responser::receiveFile(ssize_t bytesRead, char *buf)
     {
         filetranfermode = false;
 
-        std::cout << "File received and saved to " << receive_file_name << std::endl;
+        std::cout << "File received and saved to " << file_name << std::endl;
+
+        // 通知接收端是否接受檔案
+        Json::Value response;
+        response["type"] = "file_recv";
+        response["file_name"] = file_name;
+        response["file_size"] = file_size;
+        response["from"] = file_src;
+        Json::StreamWriterBuilder writer;
+        std::string jsonString = Json::writeString(writer, response);
+        write(file_dst, jsonString.c_str(), jsonString.size());
     }
     outFile.close();
 }

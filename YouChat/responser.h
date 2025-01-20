@@ -43,8 +43,9 @@ private:
     void processFileChunks();
     void sendFileChunkToClient(int target_sock, const std::string file_name, const std::string &chunk);
 
-    int receive_file_src;
-    string receive_file_name;
+    int file_src;
+    int file_dst;
+    string file_name;
     int64_t file_size = 0;
     int64_t offset = 0;
 
@@ -55,6 +56,7 @@ public:
 
     void process(int client, char *buf);
     void receiveFile(ssize_t bytesRead, char *buf);
+    void sendFile(int source_sock, string file_name);
 
     Responser(/* args */);
     ~Responser();

@@ -77,11 +77,17 @@ MainWindow::MainWindow(QWidget *parent)
 void MainWindow::on_received()
 {
     // 從 socket 讀取所有可用的數據
-    QByteArray message = socket->readAll();
-    qDebug() << "Received message:" << message;
+    QByteArray data = socket->readAll();
+
+    if(filereceivemode){
+        recvFileFromServer(data);
+        return;
+    }
+
+    qDebug() << "Received message:" << data;
 
     // 解析 JSON 數據
-    QJsonDocument jsonDoc = QJsonDocument::fromJson(message);
+    QJsonDocument jsonDoc = QJsonDocument::fromJson(data);
     if (jsonDoc.isNull()) {
         qDebug() << "Failed to create JSON doc.";
         return;
@@ -134,31 +140,43 @@ void MainWindow::on_received()
         QString from = jsonObj["from"].toString();
         QString message = jsonObj["content"].toString();
         dst = from;//收到來自from的訊息後，自動把下次傳送對象設定為from
-        recvMessage(message, ":/icon/avatar.png", "receive", from);
+        recvMessage(message, ":/icon/avatar.png", "receive", "text", from);
     }
-    else if(type == "file_chunk"){
-        QString file_name = jsonObj["file_name"].toString();
-        QFile file(file_name);
+    else if(type == "file_recv"){
+        QString from = jsonObj["from"].toString();
+        recv_file_name = jsonObj["file_name"].toString();
+        file_size = jsonObj["file_size"].toInt();
+        dst = from;//收到來自from的訊息後，自動把下次傳送對象設定為from
+        recvMessage("", ":/icon/avatar.png", "receive", "file", from);
 
-        // 嘗試以附加模式打開文件，不存在時自動創建
-        if (!file.open(QIODevice::Append | QIODevice::WriteOnly)) {
-            qWarning() << "Failed to open file for writing/appending:" << file_name;
-            return;
+        // 彈出對話框詢問是否接收檔案
+        QMessageBox msgBox;
+        msgBox.setWindowTitle("File Receive");
+        msgBox.setText(QString("File from %1 Accept?").arg(from));
+        msgBox.setIcon(QMessageBox::Question);
+        msgBox.setStandardButtons(QMessageBox::Yes | QMessageBox::No);
+        msgBox.setDefaultButton(QMessageBox::Yes);
+
+        // 根據用戶選擇處理
+        if (msgBox.exec() == QMessageBox::Yes) {
+            QJsonObject json;
+            json["type"] = "file_recv_ack";  // 類型為msg
+            json["from"] = myid;
+            json["file_name"] = recv_file_name;
+            json["file_size"] = file_size;
+            QJsonDocument doc(json);
+            QByteArray jsonData = doc.toJson(QJsonDocument::Compact);
+            socket->write(jsonData);
+            filereceivemode = true;
+            offset = 0;
+
+        } else {
+            // 如果用戶選擇拒絕，可以顯示一個提示或記錄
+            qDebug() << "User refused the file from" << from;
         }
-
-        // 解碼從 server 接收到的 base64 塊
-        QByteArray decodedChunk = QByteArray::fromBase64(jsonObj["content"].toString().toUtf8());
-
-        // 寫入塊數據
-        qint64 bytesWritten = file.write(decodedChunk);
-        if (bytesWritten == -1) {
-            qWarning() << "Failed to write data to file:" << file_name;
-        }
-
-        file.close();
     }
     else if(type == "file_ack"){
-        ack = true;
+        filesendmode = true;
     }
 }
 
@@ -182,12 +200,11 @@ void MainWindow::on_sended(){
         QByteArray jsonData = doc.toJson(QJsonDocument::Compact);
         socket->write(jsonData);
 
-        sendMessage(ui->msgEdit->toPlainText(), ":/icon/avatar.png", "sent", dst);
+        sendMessage(ui->msgEdit->toPlainText(), ":/icon/avatar.png", "sent", "text", dst);
     } else {
         qDebug() << "Not connected to server!";
     }
 }
-
 
 QString MainWindow::getSelectedRowId()
 {
@@ -226,16 +243,22 @@ QString MainWindow::getSelectedRowId()
      }
 }
 
-void MainWindow::sendMessage(const QString &message, const QString &avatarPath, const QString type, QString to)
+void MainWindow::sendMessage(const QString &message, const QString &avatarPath, const QString type, const QString datatype, QString to)
 {
-    ui->current_contact->setText( "#" + to + current_contacts[to] ); //標籤更新成聊天對象名稱
+    if(dst != "")
+        ui->current_contact->setText( "#" + to + current_contacts[to] ); //標籤更新成聊天對象名稱
 
     // 設置自定義角色值
     QStandardItem *item = new QStandardItem();
 
-    item->setData(message, Qt::DisplayRole);    // 設置消息內容
-    item->setData(QPixmap(avatarPath), Qt::DecorationRole);  // 設置頭像
-    item->setData(type, MessageDelegate::MessageTypeRole);  // 設置消息類型：sent 或 received
+    item->setData(message, Qt::DisplayRole);
+    item->setData(QPixmap(avatarPath), Qt::DecorationRole);
+    item->setData(type, MessageDelegate::DirectionTypeRole);
+    item->setData(datatype, MessageDelegate::DataTypeRole);
+
+    if(!chat_models.contains(to)){
+        chat_models[to] = new QStandardItemModel(this);
+    }
 
     ui->chatroom->setModel(chat_models[to]);
     // 添加到模型中
@@ -245,7 +268,7 @@ void MainWindow::sendMessage(const QString &message, const QString &avatarPath, 
     ui->chatroom->scrollTo(chat_models[to]->index(chat_models[to]->rowCount() - 1, 0), QAbstractItemView::PositionAtBottom);
 }
 
-void MainWindow::recvMessage(const QString &message, const QString &avatarPath, const QString type, QString from)
+void MainWindow::recvMessage(const QString &message, const QString &avatarPath, const QString type, const QString datatype, QString from)
 {
     ui->current_contact->setText( "#" + from + current_contacts[from] );//標籤更新成聊天對象名稱
 
@@ -255,8 +278,12 @@ void MainWindow::recvMessage(const QString &message, const QString &avatarPath, 
 
     item->setData(message, Qt::DisplayRole);    // 設置消息內容
     item->setData(QPixmap(avatarPath), Qt::DecorationRole);  // 設置頭像
-    item->setData(type, MessageDelegate::MessageTypeRole);  // 設置消息類型：sent 或 received
+    item->setData(type, MessageDelegate::DirectionTypeRole);  // 設置消息類型：sent 或 receive
+    item->setData(datatype, MessageDelegate::DataTypeRole);
 
+    if(!chat_models.contains(from)){
+        chat_models[from] = new QStandardItemModel(this);
+    }
 
     ui->chatroom->setModel(chat_models[from]);
 
@@ -301,6 +328,7 @@ void MainWindow::onContactsClicked(){
 void MainWindow::onSendFileButtonClicked() {
     // 使用 QFileDialog 來選擇檔案
     QString filePath = QFileDialog::getOpenFileName(this, "Choose File", "", "All Files (*.*)");
+    sendMessage("", ":/icon/avatar.png", "sent", "file", dst);
 
     if (!filePath.isEmpty()) {
         sendFileToServer(filePath);  // 呼叫檔案傳送函數
@@ -321,9 +349,9 @@ void MainWindow::sendFileToServer(const QString &filePath) {
         json["type"] = "file";
         json["file_name"] = fileName;
         json["file_size"] = fileSize;
-        //dst = getSelectedRowId();
+        dst = getSelectedRowId();
         json["from"] = myid;
-        json["to"] = "6";
+        json["to"] = dst;
 
 
         QJsonDocument doc(json);
@@ -331,14 +359,14 @@ void MainWindow::sendFileToServer(const QString &filePath) {
         socket->waitForBytesWritten();
 
 
-        while(!ack){
+        while(!filesendmode){
             QThread::msleep(10);
         }
 
         QThread::msleep(1000);
 
         if (file.open(QIODevice::ReadOnly)) {
-            const int chunkSize = 64*1024; // 每個區塊1KB
+            const int chunkSize = 256*1024; // 每個區塊1KB
             while (offset < fileSize) {
                 QByteArray chunk = file.read(chunkSize); // 讀取檔案塊
                 socket->write(chunk);
@@ -348,10 +376,23 @@ void MainWindow::sendFileToServer(const QString &filePath) {
             }
             file.close();
         }
+        filesendmode = false;
     });
 }
 
-
+void MainWindow::recvFileFromServer(const QByteArray &byteArray) {
+    QFile file(recv_file_name);
+    if (file.open(QIODevice::Append)) {  // 使用 Append 模式追加
+        file.write(byteArray);
+        offset += byteArray.size();
+        file.close();
+        if(offset >= file_size){
+            filereceivemode = false;
+        }
+    } else {
+        qWarning() << "Failed to open file for appending.";
+    }
+}
 MainWindow::~MainWindow()
 {
     delete ui;
