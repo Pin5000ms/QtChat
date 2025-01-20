@@ -43,11 +43,19 @@ private:
     void processFileChunks();
     void sendFileChunkToClient(int target_sock, const std::string file_name, const std::string &chunk);
 
+    int receive_file_src;
+    string receive_file_name;
+    int64_t file_size = 0;
+    int64_t offset = 0;
+
 public:
+    bool filetranfermode = false;
     void deleteClient(int c);
     void addClient(int c);
 
     void process(int client, char *buf);
+    void receiveFile(ssize_t bytesRead, char *buf);
+
     Responser(/* args */);
     ~Responser();
 };

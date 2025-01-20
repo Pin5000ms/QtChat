@@ -123,34 +123,50 @@ void server103()
             }
             else // 如果是已連接客戶端的數據
             {
-                while (true)
+                while (true) // 循環讀取buf
                 {
                     memset(buf, 0, sizeof(buf)); // 清空 buf
+
                     //  讀取客戶端發送的數據
                     ssize_t len = read(all_events[i].data.fd, buf, sizeof(buf));
-                    if (len < 0)
+
+                    if (rs->filetranfermode)
                     {
-                        if (errno == EAGAIN) // 非阻塞模式下，沒有數據可讀，會返回EAGAIN，不會卡在read()那行
+                        if (len < 0)
+                        {
+                            if (errno == EAGAIN)
+                            { // 非阻塞模式下，沒有數據可讀，會返回EAGAIN，不會卡在read()那行
+                                break;
+                            }
+                        }
+                        else
+                            rs->receiveFile(len, buf);
+                    }
+                    else
+                    {
+                        if (len < 0)
+                        {
+                            if (errno == EAGAIN) // 非阻塞模式下，沒有數據可讀，會返回EAGAIN，不會卡在read()那行
+                                break;
+                            printf("epoll_wait error %d %s", errno, strerror(errno));
+                            close(all_events[i].data.fd);
                             break;
-                        printf("epoll_wait error %d %s", errno, strerror(errno));
-                        close(all_events[i].data.fd);
-                        break;
-                    }
-                    else if (len == 0) // 客戶端斷開連接
-                    {
-                        epoll_ctl(epfd, EPOLL_CTL_DEL, all_events[i].data.fd, NULL);
-                        close(all_events[i].data.fd);
-                        printf("client is closed! clnt_sock:%d\n", all_events[i].data.fd);
+                        }
+                        else if (len == 0) // 客戶端斷開連接
+                        {
+                            epoll_ctl(epfd, EPOLL_CTL_DEL, all_events[i].data.fd, NULL);
+                            close(all_events[i].data.fd);
+                            printf("client is closed! clnt_sock:%d\n", all_events[i].data.fd);
 
-                        rs->deleteClient(all_events[i].data.fd);
+                            rs->deleteClient(all_events[i].data.fd);
 
-                        break;
-                    }
-                    else // 將收到的數據回傳給客戶端
-                    {
-                        // 确保 buf 是以 null 结尾的字符串
-                        buf[len] = '\0'; // 添加 null 终止符
-                        rs->process(all_events[i].data.fd, buf);
+                            break;
+                        }
+                        else
+                        {
+                            rs->process(all_events[i].data.fd, buf);
+                            // write(all_events[i].data.fd, buf, len);
+                        }
                     }
                 }
             }
@@ -169,11 +185,11 @@ void lession103(const char *arg)
 
     server103();
     // if (strcmp(arg, "s") == 0)
-    //{
+    // {
     //     server103();
     // }
     // else
-    //{
+    // {
     //     client101();
     // }
 }

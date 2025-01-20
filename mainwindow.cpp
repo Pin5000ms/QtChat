@@ -157,7 +157,7 @@ void MainWindow::on_received()
 
         file.close();
     }
-    else if(type == "file_chunk_ack"){
+    else if(type == "file_ack"){
         ack = true;
     }
 }
@@ -315,33 +315,36 @@ void MainWindow::sendFileToServer(const QString &filePath) {
         QFileInfo fileInfo(file);
         qint64 fileSize = fileInfo.size();  // 取得文件大小
         QString fileName = fileInfo.fileName();  // 取得檔案名稱
+        qint64 offset = 0;
+
+        QJsonObject json;
+        json["type"] = "file";
+        json["file_name"] = fileName;
+        json["file_size"] = fileSize;
+        //dst = getSelectedRowId();
+        json["from"] = myid;
+        json["to"] = "6";
+
+
+        QJsonDocument doc(json);
+        socket->write(doc.toJson(QJsonDocument::Compact));
+        socket->waitForBytesWritten();
+
+
+        while(!ack){
+            QThread::msleep(10);
+        }
+
+        QThread::msleep(1000);
 
         if (file.open(QIODevice::ReadOnly)) {
-            qint64 offset = 0;
-            const int chunkSize = 2*1024; // 每個區塊1KB
+            const int chunkSize = 64*1024; // 每個區塊1KB
             while (offset < fileSize) {
                 QByteArray chunk = file.read(chunkSize); // 讀取檔案塊
-                QByteArray encodedChunk = chunk.toBase64(); // 編碼區塊為Base64
-
-                QJsonObject json;
-                json["type"] = "file_chunk";
-                json["file_name"] = fileName;
-                json["file_size"] = fileSize;
-                dst = getSelectedRowId();
-                json["from"] = myid;
-                json["to"] = dst;
-                json["content"] = QString::fromUtf8(encodedChunk);
-                json["offset"] = offset;
-
-                QJsonDocument doc(json);
-                socket->write(doc.toJson(QJsonDocument::Compact));
-                ack = false;
+                socket->write(chunk);
                 socket->waitForBytesWritten();  // 等待檔案區塊發送完畢
-
                 offset += chunkSize;
-                while(!ack){
-                    QThread::msleep(10);
-                }
+                QThread::msleep(10);
             }
             file.close();
         }

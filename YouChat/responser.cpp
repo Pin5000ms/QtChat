@@ -23,6 +23,7 @@ void Responser::process(int client, char *buf)
 
     istringstream s(buf); // 將 buf 轉換成輸入流
     bool success = Json::parseFromStream(reader, s, &parsedRoot, &errors);
+
     if (!success)
     {
         std::cerr << "JSON parse error: " << errors << std::endl;
@@ -82,35 +83,60 @@ void Responser::process(int client, char *buf)
 
             write(target_sock, jsonString.c_str(), jsonString.size());
         }
-        else if (type == "file_chunk")
+        else if (type == "file")
         {
+            offset = 0;
+            file_size = 0;
             std::string filename = parsedRoot["file_name"].asString();
-            int64_t file_size = parsedRoot["file_size"].asInt64();
-            std::string chunkContent = parsedRoot["content"].asString();
-            int64_t offset = parsedRoot["offset"].asInt64();
+            file_size = parsedRoot["file_size"].asInt64();
+
             std::string target_sock_str = parsedRoot["to"].asString();
             std::string source_sock_str = parsedRoot["from"].asString();
             int target_sock = std::stoi(target_sock_str);
             int source_sock = std::stoi(source_sock_str);
 
-            // 儲存檔案區塊到緩衝區
-            // enqueueFileChunk(target_sock, chunkContent);
-            sendFileChunkToClient(target_sock, filename, chunkContent);
-
             // 發送回應
             Json::Value response;
-            response["type"] = "file_chunk_ack";
-            // response["file_name"] = filename;
-            response["offset"] = offset + chunkContent.size();
+            response["type"] = "file_ack";
             Json::StreamWriterBuilder writer;
             std::string jsonString = Json::writeString(writer, response);
             write(source_sock, jsonString.c_str(), jsonString.size()); // 回應發送端
+
+            receive_file_src = source_sock;
+            receive_file_name = filename;
+            filetranfermode = true;
         }
     }
     else
     {
         return;
     }
+}
+
+void Responser::receiveFile(ssize_t bytesRead, char *buf)
+{
+    // 創建本地文件
+    std::ofstream outFile(receive_file_name, std::ios::app | std::ios::binary);
+    if (!outFile)
+    {
+        std::cerr << "Failed to create file: " << receive_file_name << std::endl;
+        return;
+    }
+    // 接收數據並寫入文件
+    if (bytesRead > 0)
+    {
+        outFile.write(buf, bytesRead);
+        offset += bytesRead;
+        std::cout << "file chunk received" << std::endl;
+    }
+
+    if (offset >= file_size)
+    {
+        filetranfermode = false;
+
+        std::cout << "File received and saved to " << receive_file_name << std::endl;
+    }
+    outFile.close();
 }
 
 void Responser::enqueueFileChunk(int clientSock, const std::string &chunk)
