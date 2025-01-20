@@ -35,14 +35,6 @@ private:
     vector<int> clnt_socks;
     unordered_map<int, string> id_name;
 
-    // 用來儲存檔案區塊
-    std::queue<std::pair<int, std::string>> fileChunksQueue; // pair: 客戶端socket & 檔案區塊
-    std::mutex queueMutex;
-    std::condition_variable queueCondVar;
-    void enqueueFileChunk(int clientSock, const std::string &chunk);
-    void processFileChunks();
-    void sendFileChunkToClient(int target_sock, const std::string file_name, const std::string &chunk);
-
     int file_src;
     int file_dst;
     string file_name;

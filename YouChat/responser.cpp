@@ -115,7 +115,7 @@ void Responser::process(int client, char *buf)
             std::string source_sock_str = parsedRoot["from"].asString();
             int source_sock = std::stoi(source_sock_str);
 
-            std::cout << "File " << file_name << "start sent to socket " << source_sock << std::endl;
+            std::cout << "File " << file_name << " start sent to socket " << source_sock << std::endl;
             std::thread t1([this, source_sock, file_name]()
                            { this->sendFile(source_sock, file_name); });
             t1.detach();
@@ -148,7 +148,7 @@ void Responser::sendFile(int source_sock, string file_name)
         }
     }
     inFile.close();
-    std::cout << "File " << file_name << "success sent to socket " << source_sock << std::endl;
+    std::cout << "File " << file_name << " success sent to socket " << source_sock << std::endl;
 }
 
 void Responser::receiveFile(ssize_t bytesRead, char *buf)
@@ -165,7 +165,7 @@ void Responser::receiveFile(ssize_t bytesRead, char *buf)
     {
         outFile.write(buf, bytesRead);
         offset += bytesRead;
-        std::cout << "file chunk received" << std::endl;
+        // std::cout << "file chunk received" << std::endl;
     }
 
     if (offset >= file_size)
@@ -174,54 +174,17 @@ void Responser::receiveFile(ssize_t bytesRead, char *buf)
 
         std::cout << "File received and saved to " << file_name << std::endl;
 
-        // 通知接收端是否接受檔案
+        // 檔案已上傳到Server，通知接收端是否接受檔案
         Json::Value response;
         response["type"] = "file_recv";
         response["file_name"] = file_name;
         response["file_size"] = file_size;
-        response["from"] = file_src;
+        response["from"] = to_string(file_src);
         Json::StreamWriterBuilder writer;
         std::string jsonString = Json::writeString(writer, response);
         write(file_dst, jsonString.c_str(), jsonString.size());
     }
     outFile.close();
-}
-
-void Responser::enqueueFileChunk(int clientSock, const std::string &chunk)
-{
-    std::lock_guard<std::mutex> lock(queueMutex);
-    fileChunksQueue.push({clientSock, chunk});
-    queueCondVar.notify_one();
-}
-
-// 這個函式會運行在獨立的線程中，持續將 queue 中的區塊發送給目標客戶端
-void Responser::processFileChunks()
-{
-    while (true)
-    {
-        std::unique_lock<std::mutex> lock(queueMutex);
-        queueCondVar.wait(lock, [this]
-                          { return !fileChunksQueue.empty(); });
-
-        auto [clientSock, chunk] = fileChunksQueue.front();
-        fileChunksQueue.pop();
-        lock.unlock();
-
-        // 這裡進行檔案區塊的發送
-        sendFileChunkToClient(clientSock, chunk, "");
-    }
-}
-
-void Responser::sendFileChunkToClient(int target_sock, const std::string filename, const std::string &chunk)
-{
-    Json::Value response;
-    response["type"] = "file_chunk";
-    response["file_name"] = filename;
-    response["content"] = chunk;
-
-    Json::StreamWriterBuilder writer;
-    std::string jsonString = Json::writeString(writer, response);
-    write(target_sock, jsonString.c_str(), jsonString.size()); // 發送區塊至目標客戶端
 }
 
 Responser::Responser(/* args */)
