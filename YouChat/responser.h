@@ -35,11 +35,15 @@ private:
     vector<int> clnt_socks;
     unordered_map<int, string> id_name;
 
+    void NotifyFileDownload();
+
     int file_src;
     int file_dst;
     string file_name;
     int64_t file_size = 0;
     int64_t offset = 0;
+
+    void sendFileThread(int source_sock, string file_name);
 
 public:
     bool filetranfermode = false;
@@ -48,7 +52,6 @@ public:
 
     void process(int client, char *buf);
     void receiveFile(ssize_t bytesRead, char *buf);
-    void sendFile(int source_sock, string file_name);
 
     Responser(/* args */);
     ~Responser();

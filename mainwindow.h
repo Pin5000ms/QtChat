@@ -66,6 +66,7 @@ private:
     int file_size = 0;
     int offset = 0;
     QString recv_file_name;
+    QByteArray receiveBuffer;
 
 private slots:
     void on_received();  // 槽函數

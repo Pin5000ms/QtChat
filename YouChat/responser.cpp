@@ -83,7 +83,7 @@ void Responser::process(int client, char *buf)
 
             write(target_sock, jsonString.c_str(), jsonString.size());
         }
-        else if (type == "file")
+        else if (type == "file_upload")
         {
             offset = 0;
             file_size = 0;
@@ -101,7 +101,7 @@ void Responser::process(int client, char *buf)
 
             // 發送回應
             Json::Value response;
-            response["type"] = "file_ack";
+            response["type"] = "file_upload_ack";
             Json::StreamWriterBuilder writer;
             std::string jsonString = Json::writeString(writer, response);
             write(file_src, jsonString.c_str(), jsonString.size()); // 回應發送端
@@ -116,8 +116,9 @@ void Responser::process(int client, char *buf)
             int source_sock = std::stoi(source_sock_str);
 
             std::cout << "File " << file_name << " start sent to socket " << source_sock << std::endl;
+
             std::thread t1([this, source_sock, file_name]()
-                           { this->sendFile(source_sock, file_name); });
+                           { this->sendFileThread(source_sock, file_name); });
             t1.detach();
         }
     }
@@ -127,7 +128,7 @@ void Responser::process(int client, char *buf)
     }
 }
 
-void Responser::sendFile(int source_sock, string file_name)
+void Responser::sendFileThread(int source_sock, string file_name)
 {
     std::ifstream inFile(file_name, std::ios::binary);
     if (!inFile)
@@ -146,9 +147,23 @@ void Responser::sendFile(int source_sock, string file_name)
             std::cerr << "Failed to send file data to socket: " << source_sock << std::endl;
             break;
         }
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
     }
     inFile.close();
     std::cout << "File " << file_name << " success sent to socket " << source_sock << std::endl;
+}
+
+void Responser::NotifyFileDownload()
+{
+    // 檔案已上傳到Server，通知接收端是否接受檔案
+    Json::Value response;
+    response["type"] = "file_recv";
+    response["file_name"] = file_name;
+    response["file_size"] = file_size;
+    response["from"] = to_string(file_src);
+    Json::StreamWriterBuilder writer;
+    std::string jsonString = Json::writeString(writer, response);
+    write(file_dst, jsonString.c_str(), jsonString.size());
 }
 
 void Responser::receiveFile(ssize_t bytesRead, char *buf)
@@ -174,15 +189,7 @@ void Responser::receiveFile(ssize_t bytesRead, char *buf)
 
         std::cout << "File received and saved to " << file_name << std::endl;
 
-        // 檔案已上傳到Server，通知接收端是否接受檔案
-        Json::Value response;
-        response["type"] = "file_recv";
-        response["file_name"] = file_name;
-        response["file_size"] = file_size;
-        response["from"] = to_string(file_src);
-        Json::StreamWriterBuilder writer;
-        std::string jsonString = Json::writeString(writer, response);
-        write(file_dst, jsonString.c_str(), jsonString.size());
+        NotifyFileDownload();
     }
     outFile.close();
 }

@@ -101,7 +101,7 @@ void MessageDelegate::paint(QPainter *painter, const QStyleOptionViewItem &optio
         }
     }
     else if(dataType == "file"){
-        const int fileIconWidth = 80;
+        const int fileIconWidth = 75;
         QPixmap filePixmap(":/icon/file.png");
         if(messageType == "sent"){
             int origin = itemRect.right() - AVATARW;

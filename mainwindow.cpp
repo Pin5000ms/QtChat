@@ -79,6 +79,9 @@ void MainWindow::on_received()
     // 從 socket 讀取所有可用的數據
     QByteArray data = socket->readAll();
 
+
+
+
     if(filereceivemode){
         recvFileFromServer(data);
         return;
@@ -175,7 +178,7 @@ void MainWindow::on_received()
             qDebug() << "User refused the file from" << from;
         }
     }
-    else if(type == "file_ack"){
+    else if(type == "file_upload_ack"){
         filesendmode = true;
     }
 }
@@ -346,7 +349,7 @@ void MainWindow::sendFileToServer(const QString &filePath) {
         qint64 offset = 0;
 
         QJsonObject json;
-        json["type"] = "file";
+        json["type"] = "file_upload";
         json["file_name"] = fileName;
         json["file_size"] = fileSize;
         dst = getSelectedRowId();
@@ -381,16 +384,37 @@ void MainWindow::sendFileToServer(const QString &filePath) {
 }
 
 void MainWindow::recvFileFromServer(const QByteArray &byteArray) {
-    QFile file(recv_file_name);
-    if (file.open(QIODevice::Append)) {  // 使用 Append 模式追加
-        file.write(byteArray);
-        offset += byteArray.size();
-        file.close();
-        if(offset >= file_size){
-            filereceivemode = false;
+
+    //添加新數據到receiveBuffer，receiveBuffer在這邊充當queue的作用
+    receiveBuffer.append(byteArray);
+
+    const qint64 CHUNK_SIZE = 1024 * 1024; // 1MB
+
+    while (!receiveBuffer.isEmpty()) {
+        QFile file(recv_file_name);
+        if (file.open(QIODevice::Append)) {
+            qint64 bytesToWrite;
+
+            if (receiveBuffer.size() >= CHUNK_SIZE) {
+                bytesToWrite = CHUNK_SIZE;
+            } else {
+                // 處理最後的數據塊（小於 CHUNK_SIZE）
+                bytesToWrite = receiveBuffer.size();
+            }
+
+            file.write(receiveBuffer.left(bytesToWrite));//取最前面的bytesToWrite寫入
+            receiveBuffer = receiveBuffer.mid(bytesToWrite);//把bytesToWrite後的所有byte移到開頭
+            offset += bytesToWrite;
+
+            if (offset >= file_size) {
+                // 文件接收完成
+                filereceivemode = false;
+                // 如果還有剩餘數據，可以在這裡清空
+                receiveBuffer.clear();  // 可選的清空操作
+                break;
+            }
         }
-    } else {
-        qWarning() << "Failed to open file for appending.";
+        file.close();
     }
 }
 MainWindow::~MainWindow()
