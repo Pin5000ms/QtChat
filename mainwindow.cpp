@@ -4,8 +4,6 @@
 #include "ContactsDelegate.h"
 
 
-
-
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
     , ui(new Ui::MainWindow)
@@ -24,7 +22,7 @@ MainWindow::MainWindow(QWidget *parent)
     });
 
     // 連接到Server
-    connect(socket, &QTcpSocket::connected, [=]() {
+    connect(socket, &QTcpSocket::connected, this, [=]() {
         // 創建json對象
         QJsonObject json;
         json["type"] = "name";

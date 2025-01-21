@@ -25,8 +25,15 @@ void Responser::SendJSON(int socket, Json::Value response)
 }
 
 // 處理JSON字串
-void Responser::process(int client, char *buf)
+void Responser::process(int client, int len, char *buf)
 {
+
+    if (fileTranferMode)
+    {
+        ReceiveFile(len, buf);
+        return;
+    }
+
     // 解析 JSON 字符串
     Json::CharReaderBuilder reader;
     Json::Value parsedRoot;
@@ -42,14 +49,12 @@ void Responser::process(int client, char *buf)
     }
 
     string type = parsedRoot["type"].asString();
-    string content = parsedRoot["content"].asString();
-
     cout << "Parsed type: " << type << endl;
 
     if (type == "name")
     {
-        cout << "Parsed name: " << content << endl;
         id_name[client] = parsedRoot["content"].asString();
+        cout << "Parsed name: " << id_name[client] << endl;
 
         for (int j = 0; j < clnt_socks.size(); j++)
         {
@@ -77,7 +82,7 @@ void Responser::process(int client, char *buf)
         Json::Value response;
         response["from"] = parsedRoot["from"].asString();
         response["type"] = "msg";
-        response["content"] = content;
+        response["content"] = parsedRoot["content"].asString();
 
         std::string dst = parsedRoot["to"].asString(); // 提取 ID 部分
         int target_sock = std::stoi(dst);              // 將id轉為int
@@ -102,6 +107,7 @@ void Responser::process(int client, char *buf)
         // 發送回應
         Json::Value response;
         response["type"] = "file_upload_ack";
+
         SendJSON(file_src, response);
 
         fileTranferMode = true;
@@ -122,7 +128,7 @@ void Responser::process(int client, char *buf)
 }
 
 // 處裡client上傳檔案
-void Responser::receiveFile(ssize_t bytesRead, char *buf)
+void Responser::ReceiveFile(ssize_t bytesRead, char *buf)
 {
     // 創建本地文件
     std::ofstream outFile(file_name, std::ios::app | std::ios::binary);

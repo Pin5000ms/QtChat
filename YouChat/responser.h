@@ -41,16 +41,17 @@ private:
     int64_t file_size = 0;
     int64_t offset = 0;
 
+    bool fileTranferMode = false;
+    void ReceiveFile(ssize_t bytesRead, char *buf);
+
     void SendFileThread(int source_sock, string file_name);
 
     void SendJSON(int socket, Json::Value response);
 
 public:
-    bool fileTranferMode = false;
     void deleteClient(int c);
     void addClient(int c);
-    void process(int client, char *buf);
-    void receiveFile(ssize_t bytesRead, char *buf);
+    void process(int client, int len, char *buf);
 
     Responser(/* args */);
     ~Responser();

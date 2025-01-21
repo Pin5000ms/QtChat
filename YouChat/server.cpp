@@ -130,43 +130,25 @@ void server103()
                     //  讀取客戶端發送的數據
                     ssize_t len = read(all_events[i].data.fd, buf, sizeof(buf));
 
-                    if (rs->fileTranferMode)
+                    if (len < 0)
                     {
-                        if (len < 0)
-                        {
-                            if (errno == EAGAIN) // 非阻塞模式下，沒有數據可讀，會返回EAGAIN，不會卡在read()那行
-                                break;
-                            printf("epoll_wait error %d %s", errno, strerror(errno));
-                            close(all_events[i].data.fd);
+                        if (errno == EAGAIN) // 非阻塞模式下，沒有數據可讀，會返回EAGAIN，不會卡在read()那行
                             break;
-                        }
-                        else
-                            rs->receiveFile(len, buf);
+                        printf("epoll_wait error %d %s", errno, strerror(errno));
+                        close(all_events[i].data.fd);
+                        break;
+                    }
+                    else if (len == 0) // 客戶端斷開連接
+                    {
+                        epoll_ctl(epfd, EPOLL_CTL_DEL, all_events[i].data.fd, NULL);
+                        close(all_events[i].data.fd);
+                        printf("client is closed! clnt_sock:%d\n", all_events[i].data.fd);
+                        rs->deleteClient(all_events[i].data.fd);
+                        break;
                     }
                     else
                     {
-                        if (len < 0)
-                        {
-                            if (errno == EAGAIN) // 非阻塞模式下，沒有數據可讀，會返回EAGAIN，不會卡在read()那行
-                                break;
-                            printf("epoll_wait error %d %s", errno, strerror(errno));
-                            close(all_events[i].data.fd);
-                            break;
-                        }
-                        else if (len == 0) // 客戶端斷開連接
-                        {
-                            epoll_ctl(epfd, EPOLL_CTL_DEL, all_events[i].data.fd, NULL);
-                            close(all_events[i].data.fd);
-                            printf("client is closed! clnt_sock:%d\n", all_events[i].data.fd);
-
-                            rs->deleteClient(all_events[i].data.fd);
-
-                            break;
-                        }
-                        else
-                        {
-                            rs->process(all_events[i].data.fd, buf);
-                        }
+                        rs->process(all_events[i].data.fd, len, buf);
                     }
                 }
             }
