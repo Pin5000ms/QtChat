@@ -24,8 +24,6 @@
 
 #include <queue>
 #include <thread>
-#include <mutex>
-#include <condition_variable>
 
 using namespace std;
 
@@ -35,7 +33,7 @@ private:
     vector<int> clnt_socks;
     unordered_map<int, string> id_name;
 
-    void NotifyFileDownload();
+    void AskFileDownload();
 
     int file_src;
     int file_dst;
@@ -43,13 +41,14 @@ private:
     int64_t file_size = 0;
     int64_t offset = 0;
 
-    void sendFileThread(int source_sock, string file_name);
+    void SendFileThread(int source_sock, string file_name);
+
+    void SendJSON(int socket, Json::Value response);
 
 public:
-    bool filetranfermode = false;
+    bool fileTranferMode = false;
     void deleteClient(int c);
     void addClient(int c);
-
     void process(int client, char *buf);
     void receiveFile(ssize_t bytesRead, char *buf);
 

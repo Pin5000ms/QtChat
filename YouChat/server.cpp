@@ -130,14 +130,15 @@ void server103()
                     //  讀取客戶端發送的數據
                     ssize_t len = read(all_events[i].data.fd, buf, sizeof(buf));
 
-                    if (rs->filetranfermode)
+                    if (rs->fileTranferMode)
                     {
                         if (len < 0)
                         {
-                            if (errno == EAGAIN)
-                            { // 非阻塞模式下，沒有數據可讀，會返回EAGAIN，不會卡在read()那行
+                            if (errno == EAGAIN) // 非阻塞模式下，沒有數據可讀，會返回EAGAIN，不會卡在read()那行
                                 break;
-                            }
+                            printf("epoll_wait error %d %s", errno, strerror(errno));
+                            close(all_events[i].data.fd);
+                            break;
                         }
                         else
                             rs->receiveFile(len, buf);
@@ -165,13 +166,11 @@ void server103()
                         else
                         {
                             rs->process(all_events[i].data.fd, buf);
-                            // write(all_events[i].data.fd, buf, len);
                         }
                     }
                 }
             }
         }
-        // printf("%s(%d):%s \n", __FILE__, __LINE__, __FUNCTION__);
     }
 
     // 清理資源

@@ -14,13 +14,23 @@ void Responser::addClient(int c)
     clnt_socks.push_back(c);
 }
 
+void Responser::SendJSON(int socket, Json::Value response)
+{
+    // 將JSON對象轉為字串
+    Json::StreamWriterBuilder writer;
+    std::string jsonString = Json::writeString(writer, response);
+
+    // 發送JSON字串
+    write(socket, jsonString.c_str(), jsonString.size());
+}
+
+// 處理JSON字串
 void Responser::process(int client, char *buf)
 {
     // 解析 JSON 字符串
     Json::CharReaderBuilder reader;
     Json::Value parsedRoot;
     string errors;
-
     istringstream s(buf); // 將 buf 轉換成輸入流
     bool success = Json::parseFromStream(reader, s, &parsedRoot, &errors);
 
@@ -30,105 +40,117 @@ void Responser::process(int client, char *buf)
         std::cerr << "Received data: " << buf << std::endl; // 打印接收到的數據
         return;
     }
-    else if (success)
+
+    string type = parsedRoot["type"].asString();
+    string content = parsedRoot["content"].asString();
+
+    cout << "Parsed type: " << type << endl;
+
+    if (type == "name")
     {
-        string type = parsedRoot["type"].asString();
-        string content = parsedRoot["content"].asString();
+        cout << "Parsed name: " << content << endl;
+        id_name[client] = parsedRoot["content"].asString();
 
-        cout << "Parsed type: " << type << endl;
-
-        if (type == "name")
+        for (int j = 0; j < clnt_socks.size(); j++)
         {
-            cout << "Parsed name: " << content << endl;
-            id_name[client] = parsedRoot["content"].asString();
-
-            for (int j = 0; j < clnt_socks.size(); j++)
+            Json::Value response;
+            response["type"] = "contacts";
+            response["content"] = Json::Value(Json::arrayValue);
+            response["getid"] = to_string(clnt_socks[j]);
+            // response["getid"] = clnt_socks[j];
+            for (int k = 0; k < clnt_socks.size(); k++)
             {
-                Json::Value response;
-                response["type"] = "contacts";
-                response["content"] = Json::Value(Json::arrayValue);
-                response["getid"] = to_string(clnt_socks[j]);
-                // response["getid"] = clnt_socks[j];
-                for (int k = 0; k < clnt_socks.size(); k++)
+                if (clnt_socks[k] != clnt_socks[j])
                 {
-                    if (clnt_socks[k] != clnt_socks[j])
-                    {
-                        Json::Value contact;
-                        contact["id"] = clnt_socks[k];
-                        contact["name"] = id_name[clnt_socks[k]];
-                        response["content"].append(contact);
-                    }
+                    Json::Value contact;
+                    contact["id"] = clnt_socks[k];
+                    contact["name"] = id_name[clnt_socks[k]];
+                    response["content"].append(contact);
                 }
-                // 將JSON對象轉為字串
-                Json::StreamWriterBuilder writer;
-                std::string jsonString = Json::writeString(writer, response);
-
-                // 發送JSON字串
-                write(clnt_socks[j], jsonString.c_str(), jsonString.size());
-            }
-        }
-        else if (type == "msg")
-        {
-            std::string dst = parsedRoot["to"].asString(); // 提取 ID 部分
-            int target_sock = std::stoi(dst);              // 將id轉為int
-
-            Json::Value response;
-            response["from"] = parsedRoot["from"].asString();
-            response["type"] = "msg";
-            response["content"] = content;
-
-            // 將JSON對象轉為字串
-            Json::StreamWriterBuilder writer;
-            std::string jsonString = Json::writeString(writer, response);
-
-            write(target_sock, jsonString.c_str(), jsonString.size());
-        }
-        else if (type == "file_upload")
-        {
-            offset = 0;
-            file_size = 0;
-            file_name = parsedRoot["file_name"].asString();
-            file_size = parsedRoot["file_size"].asInt64();
-
-            std::string target_sock_str = parsedRoot["to"].asString();
-            std::string source_sock_str = parsedRoot["from"].asString();
-            if (target_sock_str != "")
-            {
-                file_dst = std::stoi(target_sock_str);
             }
 
-            file_src = std::stoi(source_sock_str);
-
-            // 發送回應
-            Json::Value response;
-            response["type"] = "file_upload_ack";
-            Json::StreamWriterBuilder writer;
-            std::string jsonString = Json::writeString(writer, response);
-            write(file_src, jsonString.c_str(), jsonString.size()); // 回應發送端
-
-            filetranfermode = true;
-        }
-        else if (type == "file_recv_ack")
-        {
-            file_size = parsedRoot["file_size"].asInt64();
-            std::string file_name = parsedRoot["file_name"].asString();
-            std::string source_sock_str = parsedRoot["from"].asString();
-            int source_sock = std::stoi(source_sock_str);
-
-            std::cout << "File " << file_name << " start sent to socket " << source_sock << std::endl;
-
-            std::thread t1([this, source_sock, file_name]()
-                           { this->sendFileThread(source_sock, file_name); });
-            t1.detach();
+            SendJSON(clnt_socks[j], response);
         }
     }
-    else
+    else if (type == "msg")
     {
-        return;
+        Json::Value response;
+        response["from"] = parsedRoot["from"].asString();
+        response["type"] = "msg";
+        response["content"] = content;
+
+        std::string dst = parsedRoot["to"].asString(); // 提取 ID 部分
+        int target_sock = std::stoi(dst);              // 將id轉為int
+
+        SendJSON(target_sock, response);
+    }
+    else if (type == "file_upload")
+    {
+        offset = 0;
+        file_size = 0;
+        file_name = parsedRoot["file_name"].asString();
+        file_size = parsedRoot["file_size"].asInt64();
+
+        std::string target_sock_str = parsedRoot["to"].asString();
+        std::string source_sock_str = parsedRoot["from"].asString();
+        if (target_sock_str != "")
+        {
+            file_dst = std::stoi(target_sock_str);
+        }
+        file_src = std::stoi(source_sock_str);
+
+        // 發送回應
+        Json::Value response;
+        response["type"] = "file_upload_ack";
+        SendJSON(file_src, response);
+
+        fileTranferMode = true;
+    }
+    else if (type == "file_recv_ack")
+    {
+        file_size = parsedRoot["file_size"].asInt64();
+        std::string file_name = parsedRoot["file_name"].asString();
+        std::string source_sock_str = parsedRoot["from"].asString();
+        int source_sock = std::stoi(source_sock_str);
+
+        std::cout << "File " << file_name << " start sent to socket " << source_sock << std::endl;
+
+        std::thread t1([this, source_sock, file_name]()
+                       { this->SendFileThread(source_sock, file_name); });
+        t1.detach();
     }
 }
 
-void Responser::sendFileThread(int source_sock, string file_name)
+// 處裡client上傳檔案
+void Responser::receiveFile(ssize_t bytesRead, char *buf)
+{
+    // 創建本地文件
+    std::ofstream outFile(file_name, std::ios::app | std::ios::binary);
+    if (!outFile)
+    {
+        std::cerr << "Failed to create file: " << file_name << std::endl;
+        return;
+    }
+    // 接收數據並寫入文件
+    if (bytesRead > 0)
+    {
+        outFile.write(buf, bytesRead);
+        offset += bytesRead;
+        // std::cout << "file chunk received" << std::endl;
+    }
+
+    if (offset >= file_size)
+    {
+        fileTranferMode = false;
+
+        std::cout << "File received and saved to " << file_name << std::endl;
+
+        AskFileDownload();
+    }
+    outFile.close();
+}
+
+void Responser::SendFileThread(int source_sock, string file_name)
 {
     std::ifstream inFile(file_name, std::ios::binary);
     if (!inFile)
@@ -153,7 +175,7 @@ void Responser::sendFileThread(int source_sock, string file_name)
     std::cout << "File " << file_name << " success sent to socket " << source_sock << std::endl;
 }
 
-void Responser::NotifyFileDownload()
+void Responser::AskFileDownload()
 {
     // 檔案已上傳到Server，通知接收端是否接受檔案
     Json::Value response;
@@ -161,37 +183,8 @@ void Responser::NotifyFileDownload()
     response["file_name"] = file_name;
     response["file_size"] = file_size;
     response["from"] = to_string(file_src);
-    Json::StreamWriterBuilder writer;
-    std::string jsonString = Json::writeString(writer, response);
-    write(file_dst, jsonString.c_str(), jsonString.size());
-}
 
-void Responser::receiveFile(ssize_t bytesRead, char *buf)
-{
-    // 創建本地文件
-    std::ofstream outFile(file_name, std::ios::app | std::ios::binary);
-    if (!outFile)
-    {
-        std::cerr << "Failed to create file: " << file_name << std::endl;
-        return;
-    }
-    // 接收數據並寫入文件
-    if (bytesRead > 0)
-    {
-        outFile.write(buf, bytesRead);
-        offset += bytesRead;
-        // std::cout << "file chunk received" << std::endl;
-    }
-
-    if (offset >= file_size)
-    {
-        filetranfermode = false;
-
-        std::cout << "File received and saved to " << file_name << std::endl;
-
-        NotifyFileDownload();
-    }
-    outFile.close();
+    SendJSON(file_dst, response);
 }
 
 Responser::Responser(/* args */)
