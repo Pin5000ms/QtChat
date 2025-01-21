@@ -11,6 +11,7 @@ MainWindow::MainWindow(QWidget *parent)
     , socket(new QTcpSocket())
 {
     ui->setupUi(this);
+    ui->clientName->setText("Client");
 
 
     connect(socket, &QTcpSocket::connected, []() {
@@ -26,7 +27,7 @@ MainWindow::MainWindow(QWidget *parent)
         // 創建json對象
         QJsonObject json;
         json["type"] = "name";
-        json["content"] = "Tom";
+        json["content"] = ui->clientName->toPlainText();;
 
         // 將 JSON 對象轉為byte array
         QJsonDocument doc(json);
@@ -129,9 +130,11 @@ void MainWindow::on_received()
                     chat_models.insert(qid, new QStandardItemModel(this));
                 }
             }
+
         }
 
         myid = jsonObj["getid"].toString();//更新自己的ID
+        ui->clientName->setText("#" + myid + "Client");
         if(!chat_models.contains(myid)){
             chat_models.insert(myid, new QStandardItemModel(this));
             ui->chatroom->setModel(chat_models[myid]);

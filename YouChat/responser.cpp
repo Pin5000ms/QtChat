@@ -14,7 +14,7 @@ void Responser::addClient(int c)
     clnt_socks.push_back(c);
 }
 
-void Responser::SendJSON(int socket, Json::Value response)
+void Responser::sendJSON(int socket, Json::Value response)
 {
     // 將JSON對象轉為字串
     Json::StreamWriterBuilder writer;
@@ -30,7 +30,7 @@ void Responser::process(int client, int len, char *buf)
 
     if (fileTranferMode)
     {
-        ReceiveFile(len, buf);
+        receiveFile(len, buf);
         return;
     }
 
@@ -74,7 +74,7 @@ void Responser::process(int client, int len, char *buf)
                 }
             }
 
-            SendJSON(clnt_socks[j], response);
+            sendJSON(clnt_socks[j], response);
         }
     }
     else if (type == "msg")
@@ -87,7 +87,7 @@ void Responser::process(int client, int len, char *buf)
         std::string dst = parsedRoot["to"].asString(); // 提取 ID 部分
         int target_sock = std::stoi(dst);              // 將id轉為int
 
-        SendJSON(target_sock, response);
+        sendJSON(target_sock, response);
     }
     else if (type == "file_upload")
     {
@@ -108,7 +108,7 @@ void Responser::process(int client, int len, char *buf)
         Json::Value response;
         response["type"] = "file_upload_ack";
 
-        SendJSON(file_src, response);
+        sendJSON(file_src, response);
 
         fileTranferMode = true;
     }
@@ -122,16 +122,16 @@ void Responser::process(int client, int len, char *buf)
         std::cout << "File " << file_name << " start sent to socket " << source_sock << std::endl;
 
         std::thread t1([this, source_sock, file_name]()
-                       { this->SendFileThread(source_sock, file_name); });
+                       { this->sendFileThread(source_sock, file_name); });
         t1.detach();
     }
 }
 
 // 處裡client上傳檔案
-void Responser::ReceiveFile(ssize_t bytesRead, char *buf)
+void Responser::receiveFile(ssize_t bytesRead, char *buf)
 {
     // 創建本地文件
-    std::ofstream outFile(file_name, std::ios::app | std::ios::binary);
+    std::ofstream outFile(file_name, std::ios::app | std::ios::binary); // std::ios::app 添加到文件末尾
     if (!outFile)
     {
         std::cerr << "Failed to create file: " << file_name << std::endl;
@@ -151,12 +151,12 @@ void Responser::ReceiveFile(ssize_t bytesRead, char *buf)
 
         std::cout << "File received and saved to " << file_name << std::endl;
 
-        AskFileDownload();
+        notifyFileDownload();
     }
     outFile.close();
 }
 
-void Responser::SendFileThread(int source_sock, string file_name)
+void Responser::sendFileThread(int source_sock, string file_name)
 {
     std::ifstream inFile(file_name, std::ios::binary);
     if (!inFile)
@@ -181,7 +181,7 @@ void Responser::SendFileThread(int source_sock, string file_name)
     std::cout << "File " << file_name << " success sent to socket " << source_sock << std::endl;
 }
 
-void Responser::AskFileDownload()
+void Responser::notifyFileDownload()
 {
     // 檔案已上傳到Server，通知接收端是否接受檔案
     Json::Value response;
@@ -190,7 +190,7 @@ void Responser::AskFileDownload()
     response["file_size"] = file_size;
     response["from"] = to_string(file_src);
 
-    SendJSON(file_dst, response);
+    sendJSON(file_dst, response);
 }
 
 Responser::Responser(/* args */)

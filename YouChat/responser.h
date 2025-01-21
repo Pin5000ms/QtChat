@@ -1,29 +1,29 @@
-#include <stdio.h> // printf()、perror()
-#include <vector>
-#include <unordered_map>
-#include <iostream>
-#include <stdlib.h>
-#include <jsoncpp/json/json.h>
 
-#include <algorithm>
-#include <sys/epoll.h>
-#include <cstdio>
-#include <ctype.h>
+// C++ 標準函式庫
+#include <vector>        // 用於儲存客戶端 socket (clnt_socks)
+#include <queue>         // 用於檔案傳輸佇列
+#include <unordered_map> // 用於儲存客戶端 ID 和名稱的對應 (id_name)
+#include <iostream>      // 用於輸出偵錯資訊 (cout, cerr)
+#include <fstream>       // 用於檔案讀寫操作 (receiveFile, sendFileThread)
+#include <memory>        // 用於智慧型指標 (unique_ptr)
+#include <thread>        // 用於建立檔案傳輸執行緒 (sendFileThread)
+#include <algorithm>     // 用於尋找和刪除客戶端 (deleteClient)
 
-#include <sys/socket.h> // 基本 socket 函數和結構
-#include <netinet/in.h> // 網路地址結構
-#include <arpa/inet.h>  // 地址轉換函數
-#include <unistd.h>     // close() 函數
-#include <string.h>     // memset()
+// C 標準函式庫（使用 C++ 版本）
+#include <cstdio>  // 用來列印偵錯資訊 (printf)
+#include <cstring> // 用於記憶體操作 (memset)
 
-#include <errno.h> // errno 和錯誤代碼
-#include <wait.h>
-#include <fcntl.h>
+// 系統相關
+#include <sys/epoll.h>  // 用於 epoll 事件處理
+#include <sys/socket.h> // 用於 socket 通信
+#include <netinet/in.h> // 用於網路位址結構
+#include <arpa/inet.h>  // 用於位址轉換
+#include <unistd.h>     // 用於檔案描述符操作 (close, read, write)
+#include <fcntl.h>      // 用於檔案控制 (非阻塞模式設定)
+#include <errno.h>      // 用於錯誤處理
 
-#include <fstream>
-
-#include <queue>
-#include <thread>
+// 第三方函式庫
+#include <jsoncpp/json/json.h> // 用於 JSON 資料處理 (process)
 
 using namespace std;
 
@@ -33,8 +33,6 @@ private:
     vector<int> clnt_socks;
     unordered_map<int, string> id_name;
 
-    void AskFileDownload();
-
     int file_src;
     int file_dst;
     string file_name;
@@ -42,11 +40,13 @@ private:
     int64_t offset = 0;
 
     bool fileTranferMode = false;
-    void ReceiveFile(ssize_t bytesRead, char *buf);
+    void receiveFile(ssize_t bytesRead, char *buf);
 
-    void SendFileThread(int source_sock, string file_name);
+    void sendFileThread(int source_sock, string file_name);
 
-    void SendJSON(int socket, Json::Value response);
+    void notifyFileDownload();
+
+    void sendJSON(int socket, Json::Value response);
 
 public:
     void deleteClient(int c);

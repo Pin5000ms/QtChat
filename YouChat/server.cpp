@@ -1,182 +1,164 @@
-#include "responser.h"
+#include "server.h"
 
-void client101()
+Server::Server(uint16_t port) : port_(port)
 {
-    int sock = socket(PF_INET, SOCK_STREAM, 0);
-    sockaddr_in serv_adr;
-    memset(&serv_adr, 0, sizeof(serv_adr));
-    serv_adr.sin_family = AF_INET;
-    serv_adr.sin_addr.s_addr = inet_addr("127.0.0.1");
-    serv_adr.sin_port = htons(9527);
-
-    if (connect(sock, (sockaddr *)&serv_adr, sizeof(serv_adr)) == -1)
-    {
-        printf("connect error %d %s", errno, strerror(errno));
-        close(sock);
-        return;
-    }
-    char message[256] = "";
-    while (true)
-    {
-        printf("Input message(q to quit):");
-        fgets(message, sizeof(message), stdin);
-        if (!strcmp(message, "q\n") || !strcmp(message, "q\n"))
-            break;
-        write(sock, message, strlen(message));
-        memset(message, 0, strlen(message));
-        read(sock, message, sizeof(message));
-        printf("server:%s\n", message);
-    }
-    close(sock);
+    initializeServer();
 }
 
-void server103()
+void Server::run()
 {
-    Responser *rs = new Responser();
-    // 宣告伺服器和客戶端的socket描述符
-    int serv_sock, clnt_sock;
-    // 宣告伺服器和客戶端的地址結構
-    sockaddr_in serv_adr, clnt_adr;
-    // 客戶端地址結構的大小
-    socklen_t clnt_sz;
-    // 用於儲存接收到的數據的緩衝區
-    char buf[1024 * 1024] = "";
-    // 創建TCP socket
-    serv_sock = socket(PF_INET, SOCK_STREAM, 0);
+    try
+    {
+        eventLoop();
+    }
+    catch (const std::exception &e)
+    {
+        std::cerr << "Server error: " << e.what() << std::endl;
+    }
+}
 
-    // 設置 SO_REUSEADDR 選項
+void Server::initializeServer()
+{
+    createSocket();
+    setSocketOptions();
+    bindSocket();
+    startListening();
+    initializeEpoll();
+    responser_ = std::make_unique<Responser>();
+}
+
+void Server::createSocket()
+{
+    serverSocket_ = socket(PF_INET, SOCK_STREAM, 0);
+    if (serverSocket_ == -1)
+    {
+        throw std::system_error(errno, std::system_category(), "Failed to create socket");
+    }
+}
+
+void Server::setSocketOptions()
+{
     int opt = 1;
-    setsockopt(serv_sock, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
-
-    // 設置伺服器地址結構
-    serv_adr.sin_family = AF_INET;
-    serv_adr.sin_addr.s_addr = htonl(INADDR_ANY); // 接受任意IP的連接
-    serv_adr.sin_port = htons(9527);              // 設置端口號
-
-    // 將socket綁定到指定的IP和端口
-    if (bind(serv_sock, (sockaddr *)&serv_adr, sizeof(serv_adr)) == -1)
+    if (setsockopt(serverSocket_, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) == -1)
     {
-        printf("bind error %d %s", errno, strerror(errno));
-        close(serv_sock);
-        return;
+        throw std::system_error(errno, std::system_category(), "Failed to set socket options");
     }
+}
 
-    // 開始監聽連接請求，最大等待隊列長度為5
-    if (listen(serv_sock, 5) == -1)
+void Server::bindSocket()
+{
+    sockaddr_in serverAddr{};
+    serverAddr.sin_family = AF_INET;
+    serverAddr.sin_addr.s_addr = htonl(INADDR_ANY);
+    serverAddr.sin_port = htons(port_);
+
+    if (bind(serverSocket_, reinterpret_cast<sockaddr *>(&serverAddr), sizeof(serverAddr)) == -1)
     {
-        printf("listen error %d %s", errno, strerror(errno));
-        close(serv_sock);
-        return;
+        throw std::system_error(errno, std::system_category(), "Failed to bind socket");
     }
+}
 
-    // 創建epoll實例
-    epoll_event event;
-    int epfd, event_cnt;
-    epfd = epoll_create(1);
-    if (epfd == -1)
+void Server::startListening()
+{
+    if (listen(serverSocket_, 5) == -1)
     {
-        printf("epoll_create error %d %s", errno, strerror(errno));
-        close(serv_sock);
-        return;
+        throw std::system_error(errno, std::system_category(), "Failed to listen on socket");
     }
-    // 創建事件數組，用於存儲epoll事件
-    epoll_event *all_events = new epoll_event[100];
+}
 
-    // 將伺服器socket添加到epoll中監聽
-    event.events = EPOLLIN; // 監聽輸入事件
-    event.data.fd = serv_sock;
-    epoll_ctl(epfd, EPOLL_CTL_ADD, serv_sock, &event);
+void Server::Server::initializeEpoll()
+{
+    epollFd_ = epoll_create(1);
+    if (epollFd_ == -1)
+    {
+        throw std::system_error(errno, std::system_category(), "Failed to create epoll instance");
+    }
+    event_.events = EPOLLIN;
+    event_.data.fd = serverSocket_;
+
+    epoll_ctl(epollFd_, EPOLL_CTL_ADD, serverSocket_, &event_);
+    events_.resize(MAX_EVENTS);
+}
+
+void Server::eventLoop()
+{
+
+    char buf[1024 * 1024] = ""; // 用於儲存接收到的數據的緩衝區
 
     while (true)
     {
-        // 等待事件發生，超時時間為1秒
-        event_cnt = epoll_wait(epfd, all_events, 100, 1000);
-        if (event_cnt == -1)
+        int numEvents = epoll_wait(epollFd_, events_.data(), MAX_EVENTS, 1000);
+
+        // if (numEvents == -1)
+        // {
+        //     if (errno == EINTR)
+        //         continue;
+        //     throw std::system_error(errno, std::system_category(), "Epoll wait failed");
+        // }
+
+        if (numEvents == -1)
         {
             printf("epoll_wait error %d %s", errno, strerror(errno));
             break;
         }
-        if (event_cnt == 0) // 如果沒有事件發生，繼續等待
+        if (numEvents == 0) // 如果沒有事件發生，繼續等待
             continue;
 
-        // event_cnt代表有幾個事件觸發了
-        for (int i = 0; i < event_cnt; i++)
+        for (int i = 0; i < numEvents; ++i)
         {
-            if (all_events[i].data.fd == serv_sock) // 如果是新的連接請求
+            if (events_[i].data.fd == serverSocket_)
             {
-                clnt_sz = sizeof(clnt_adr);
-                clnt_sock = accept(serv_sock, (sockaddr *)&clnt_adr, &clnt_sz);
+                sockaddr_in clnt_adr;
+                // handleNewConnection();
+                socklen_t clnt_sz = sizeof(clnt_adr);
+                int clnt_sock = accept(serverSocket_, (sockaddr *)&clnt_adr, &clnt_sz);
 
                 // 把連接到的客戶端加入epoll，ET代表邊緣觸發
-                event.events = EPOLLIN | EPOLLET;
-                event.data.fd = clnt_sock;
+                event_.events = EPOLLIN | EPOLLET;
+                event_.data.fd = clnt_sock;
 
                 // 將客戶端socket設置為非阻塞模式
                 int flag = fcntl(clnt_sock, F_GETFL, 0);
                 fcntl(clnt_sock, F_SETFL, flag | O_NONBLOCK);
 
                 // 將客戶端socket添加到epoll中監聽
-                epoll_ctl(epfd, EPOLL_CTL_ADD, clnt_sock, &event);
+                epoll_ctl(epollFd_, EPOLL_CTL_ADD, clnt_sock, &event_);
                 printf("client is connected! clnt_sock:%d\n", clnt_sock);
 
-                rs->addClient(clnt_sock);
+                responser_->addClient(clnt_sock);
             }
-            else // 如果是已連接客戶端的數據
+            else
             {
+                // handleClientData(events_[i].data.fd);
                 while (true) // 循環讀取buf
                 {
                     memset(buf, 0, sizeof(buf)); // 清空 buf
 
                     //  讀取客戶端發送的數據
-                    ssize_t len = read(all_events[i].data.fd, buf, sizeof(buf));
+                    ssize_t len = read(events_[i].data.fd, buf, sizeof(buf));
 
                     if (len < 0)
                     {
                         if (errno == EAGAIN) // 非阻塞模式下，沒有數據可讀，會返回EAGAIN，不會卡在read()那行
                             break;
                         printf("epoll_wait error %d %s", errno, strerror(errno));
-                        close(all_events[i].data.fd);
+                        close(events_[i].data.fd);
                         break;
                     }
                     else if (len == 0) // 客戶端斷開連接
                     {
-                        epoll_ctl(epfd, EPOLL_CTL_DEL, all_events[i].data.fd, NULL);
-                        close(all_events[i].data.fd);
-                        printf("client is closed! clnt_sock:%d\n", all_events[i].data.fd);
-                        rs->deleteClient(all_events[i].data.fd);
+                        epoll_ctl(epollFd_, EPOLL_CTL_DEL, events_[i].data.fd, NULL);
+                        close(events_[i].data.fd);
+                        printf("client is closed! clnt_sock:%d\n", events_[i].data.fd);
+                        responser_->deleteClient(events_[i].data.fd);
                         break;
                     }
                     else
                     {
-                        rs->process(all_events[i].data.fd, len, buf);
+                        responser_->process(events_[i].data.fd, len, buf);
                     }
                 }
             }
         }
     }
-
-    // 清理資源
-    delete[] all_events;
-    close(serv_sock);
-    close(epfd);
-}
-
-void lession103(const char *arg)
-{
-
-    server103();
-    // if (strcmp(arg, "s") == 0)
-    // {
-    //     server103();
-    // }
-    // else
-    // {
-    //     client101();
-    // }
-}
-
-int main(int argc, char *argv[])
-{
-    lession103(argv[1]);
-    return 0;
 }

@@ -82,7 +82,7 @@ void MessageDelegate::paint(QPainter *painter, const QStyleOptionViewItem &optio
         int textWidth = calculateTextWidth(text);
         // 設定範圍
         if(messageType == "sent"){
-            int origin = itemRect.right() - AVATARW;
+            int origin = itemRect.right() - 10;// - AVATARW;
             bubbleRect.setRight(origin);
 
             if(textWidth < itemRect.width()*0.8)
@@ -104,7 +104,7 @@ void MessageDelegate::paint(QPainter *painter, const QStyleOptionViewItem &optio
         const int fileIconWidth = 75;
         QPixmap filePixmap(":/icon/file.png");
         if(messageType == "sent"){
-            int origin = itemRect.right() - AVATARW;
+            int origin = itemRect.right() - 10;// - AVATARW;
             bubbleRect.setRight(origin);
             bubbleRect.setLeft(origin - fileIconWidth - 10);
         }
@@ -146,7 +146,8 @@ void MessageDelegate::paint(QPainter *painter, const QStyleOptionViewItem &optio
     // 根據消息類型決定頭像的位置
     int avatarX = (messageType == "sent") ? option.rect.right() - AVATARW : option.rect.left() + 10;
     QRect avatarRect(avatarX, option.rect.top() + 5, AVATARW, AVATARW);
-    painter->drawPixmap(avatarRect, avatar);  // 繪製頭像
+    if(messageType == "receive")
+        painter->drawPixmap(avatarRect, avatar);  // 繪製頭像
 
 }
 
