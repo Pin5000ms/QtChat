@@ -52,17 +52,19 @@ private:
     QMap<QString, QString> current_contacts;
     QTcpSocket *socket;
     QString getSelectedRowId();
-    void sendMessage(const QString &message, const QString &avatarPath, const QString type, const QString datatype, QString to);
-    void recvMessage(const QString &message, const QString &avatarPath, const QString type, const QString datatype, QString from);
+    QModelIndex sendMessage(const QString &message, const QString &avatarPath, const QString type, const QString datatype, QString to);
+    QModelIndex recvMessage(const QString &message, const QString &avatarPath, const QString type, const QString datatype, QString from);
 
     //void setupDragAndDrop();
     //void dragEnterEvent(QDragEnterEvent *event);
     //void dropEvent(QDropEvent *event);
     void onSendFileButtonClicked();
-    void sendFileToServer(const QString &filePath);
-    void recvFileFromServer(const QByteArray &byteArray);
+    void sendFileToServer(const QString &filePath, QModelIndex index, QString to);
+    void recvFileFromServer(const QByteArray &byteArray, QModelIndex index, QString from);
     bool filesendmode = false;
     bool filereceivemode = false;
+    QString file_from;
+    QModelIndex file_index;
     int file_size = 0;
     int offset = 0;
     QString recv_file_name;

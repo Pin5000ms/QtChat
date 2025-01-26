@@ -69,7 +69,7 @@ void MessageDelegate::paint(QPainter *painter, const QStyleOptionViewItem &optio
     QStyleOptionViewItem newOption(option);
 
     // 增加上下 margin
-    QRect itemRect = newOption.rect;
+    QRect itemRect = newOption.rect;//高度從sizeHint來的
     itemRect.setTop(itemRect.top() + 10);  // Top margin
     itemRect.setBottom(itemRect.bottom() - 10);  // Bottom margin
 
@@ -117,6 +117,25 @@ void MessageDelegate::paint(QPainter *painter, const QStyleOptionViewItem &optio
         painter->drawPixmap(bubbleRect, filePixmap);
 
     }
+
+
+
+    // 繪製進度條
+    int progress = index.data(ProgressRole).toInt(); // 取得進度值
+
+    QRect progressRect = bubbleRect;
+    progressRect.setTop(bubbleRect.bottom() + 5); // 在文件圖標下方
+    progressRect.setHeight(10); // 進度條高度
+    progressRect.setLeft(progressRect.left() + 5);
+    progressRect.setRight(progressRect.right() - 5);
+
+    painter->setBrush(Qt::gray); // 進度條背景
+    painter->drawRect(progressRect);
+
+    QRect progressFillRect = progressRect;
+    progressFillRect.setWidth(progressRect.width() * progress / 100); // 根據進度調整寬度
+    painter->setBrush(Qt::blue); // 進度條填充顏色
+    painter->drawRect(progressFillRect);
 
 
 
@@ -181,7 +200,7 @@ QSize MessageDelegate::sizeHint(const QStyleOptionViewItem &option, const QModel
 
     QString dataType = index.data(DataTypeRole).toString();
     if(dataType == "file"){
-        return QSize(option.rect.width(), 100);
+        return QSize(option.rect.width(), 120);
     }
     // 根據每行30個字元來計算所需行數
     int requiredLines = getRequiredLines(text);

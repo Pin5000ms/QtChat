@@ -27,7 +27,7 @@ MainWindow::MainWindow(QWidget *parent)
         // 創建json對象
         QJsonObject json;
         json["type"] = "name";
-        json["content"] = ui->clientName->toPlainText();;
+        json["content"] = ui->clientName->text();
 
         // 將 JSON 對象轉為byte array
         QJsonDocument doc(json);
@@ -57,14 +57,14 @@ MainWindow::MainWindow(QWidget *parent)
 
 
 
-    // 在聊天室視窗中創建並設置自定義的委託
-    MessageDelegate *delegate = new MessageDelegate(this);
-    ui->chatroom->setItemDelegate(delegate);
+    // 在聊天室視窗中創建並設置自定義的委託，當中的每個Item會以委託類呈現
+    MessageDelegate *delegate1 = new MessageDelegate(this);
+    ui->chatroom->setItemDelegate(delegate1);
     ui->chatroom->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     //ui->chatroom->setModel(chat_model);// 設置 QListView 的模型
 
 
-    // 在聯絡人清單中創建並設置自定義的委託
+    // 在聯絡人清單中創建並設置自定義的委託，當中的每個Item會以委託類呈現
     ContactsDelegate *delegate2 = new ContactsDelegate(this);
     ui->contacts->setItemDelegate(delegate2);
     ui->contacts->setModel(contact_model);
@@ -75,16 +75,20 @@ MainWindow::MainWindow(QWidget *parent)
 
 void MainWindow::on_received()
 {
+
     // 從 socket 讀取所有可用的數據
     QByteArray data = socket->readAll();
 
 
 
-
     if(filereceivemode){
-        recvFileFromServer(data);
+        recvFileFromServer(data, file_index, file_from);
         return;
     }
+
+
+
+
 
     qDebug() << "Received message:" << data;
 
@@ -147,16 +151,16 @@ void MainWindow::on_received()
         recvMessage(message, ":/icon/avatar.png", "receive", "text", from);
     }
     else if(type == "file_recv"){
-        QString from = jsonObj["from"].toString();
+        file_from = jsonObj["from"].toString();
         recv_file_name = jsonObj["file_name"].toString();
         file_size = jsonObj["file_size"].toInt();
-        dst = from;//收到來自from的訊息後，自動把下次傳送對象設定為from
-        recvMessage("", ":/icon/avatar.png", "receive", "file", from);
+        dst = file_from;//收到來自from的訊息後，自動把下次傳送對象設定為from
+        file_index = recvMessage("", ":/icon/avatar.png", "receive", "file", file_from);
 
         // 彈出對話框詢問是否接收檔案
         QMessageBox msgBox;
         msgBox.setWindowTitle("File Receive");
-        msgBox.setText(QString("File from %1 Accept?").arg(from));
+        msgBox.setText(QString("File from %1 Accept?").arg(file_from));
         msgBox.setIcon(QMessageBox::Question);
         msgBox.setStandardButtons(QMessageBox::Yes | QMessageBox::No);
         msgBox.setDefaultButton(QMessageBox::Yes);
@@ -176,7 +180,7 @@ void MainWindow::on_received()
 
         } else {
             // 如果用戶選擇拒絕，可以顯示一個提示或記錄
-            qDebug() << "User refused the file from" << from;
+            qDebug() << "User refused the file from" << file_from;
         }
     }
     else if(type == "file_upload_ack"){
@@ -247,7 +251,7 @@ QString MainWindow::getSelectedRowId()
      }
 }
 
-void MainWindow::sendMessage(const QString &message, const QString &avatarPath, const QString type, const QString datatype, QString to)
+QModelIndex MainWindow::sendMessage(const QString &message, const QString &avatarPath, const QString type, const QString datatype, QString to)
 {
     if(dst != "")
         ui->current_contact->setText( "#" + to + current_contacts[to] ); //標籤更新成聊天對象名稱
@@ -265,14 +269,20 @@ void MainWindow::sendMessage(const QString &message, const QString &avatarPath, 
     }
 
     ui->chatroom->setModel(chat_models[to]);
+
+
     // 添加到模型中
     chat_models[to]->appendRow(item);
 
+    QModelIndex rowIndex = chat_models[to]->indexFromItem(item);//插入的row位置
+
     // 自動滾動到底部
     ui->chatroom->scrollTo(chat_models[to]->index(chat_models[to]->rowCount() - 1, 0), QAbstractItemView::PositionAtBottom);
+
+    return rowIndex;
 }
 
-void MainWindow::recvMessage(const QString &message, const QString &avatarPath, const QString type, const QString datatype, QString from)
+QModelIndex MainWindow::recvMessage(const QString &message, const QString &avatarPath, const QString type, const QString datatype, QString from)
 {
     ui->current_contact->setText( "#" + from + current_contacts[from] );//標籤更新成聊天對象名稱
 
@@ -293,8 +303,12 @@ void MainWindow::recvMessage(const QString &message, const QString &avatarPath, 
 
     chat_models[from]->appendRow(item);
 
+    QModelIndex rowIndex = chat_models[from]->indexFromItem(item);//插入的row位置
+
     // 自動滾動到底部
     ui->chatroom->scrollTo(chat_models[from]->index(chat_models[from]->rowCount() - 1, 0), QAbstractItemView::PositionAtBottom);
+
+    return rowIndex;
 }
 
 /*
@@ -330,18 +344,19 @@ void MainWindow::onContactsClicked(){
 
 // 點擊後傳輸檔案
 void MainWindow::onSendFileButtonClicked() {
+
     // 使用 QFileDialog 來選擇檔案
     QString filePath = QFileDialog::getOpenFileName(this, "Choose File", "", "All Files (*.*)");
-    sendMessage("", ":/icon/avatar.png", "sent", "file", dst);
 
     if (!filePath.isEmpty()) {
-        sendFileToServer(filePath);  // 呼叫檔案傳送函數
+        QModelIndex index = sendMessage("", ":/icon/avatar.png", "sent", "file", dst);
+        sendFileToServer(filePath, index, dst);  // 呼叫檔案傳送函數
     }
 }
 
 
 // 傳輸檔案
-void MainWindow::sendFileToServer(const QString &filePath) {
+void MainWindow::sendFileToServer(const QString &filePath, QModelIndex index, QString to) {
     QtConcurrent::run([=]() {
         QFile file(filePath);
         QFileInfo fileInfo(file);
@@ -375,7 +390,17 @@ void MainWindow::sendFileToServer(const QString &filePath) {
                 QByteArray chunk = file.read(chunkSize); // 讀取檔案塊
                 socket->write(chunk);
                 socket->waitForBytesWritten();  // 等待檔案區塊發送完畢
+
+
                 offset += chunkSize;
+
+
+                // 更新模型中的進度
+                int newProgressValue = offset*100/fileSize;
+                chat_models[to]->setData(index, newProgressValue, MessageDelegate::ProgressRole);
+                ui->chatroom->viewport()->update();
+
+
                 QThread::msleep(10);
             }
             file.close();
@@ -384,7 +409,8 @@ void MainWindow::sendFileToServer(const QString &filePath) {
     });
 }
 
-void MainWindow::recvFileFromServer(const QByteArray &byteArray) {
+void MainWindow::recvFileFromServer(const QByteArray &byteArray, QModelIndex index, QString from) {
+
 
     //添加新數據到receiveBuffer，receiveBuffer在這邊充當queue的作用
     receiveBuffer.append(byteArray);
@@ -406,6 +432,14 @@ void MainWindow::recvFileFromServer(const QByteArray &byteArray) {
             file.write(receiveBuffer.left(bytesToWrite));//取最前面的bytesToWrite寫入
             receiveBuffer = receiveBuffer.mid(bytesToWrite);//把bytesToWrite後的所有byte移到開頭
             offset += bytesToWrite;
+
+
+
+            // 更新模型中的進度
+            int newProgressValue = offset*100/file_size;
+            chat_models[from]->setData(index, newProgressValue, MessageDelegate::ProgressRole);
+            ui->chatroom->viewport()->update();
+
 
             if (offset >= file_size) {
                 // 文件接收完成

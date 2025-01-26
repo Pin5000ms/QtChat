@@ -13,7 +13,8 @@ public:
     enum MessageRoles {
         DirectionTypeRole = Qt::UserRole + 1,  // sent or receive
         DataTypeRole,  // 檔案or訊息
-        AvatarRole
+        AvatarRole,
+        ProgressRole //傳送檔案進度條
     };
 
     QSize sizeHint(const QStyleOptionViewItem &option, const QModelIndex &index) const override;
