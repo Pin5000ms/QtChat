@@ -55,6 +55,10 @@ private:
     QModelIndex sendMessage(const QString &message, const QString &avatarPath, const QString type, const QString datatype, QString to);
     QModelIndex recvMessage(const QString &message, const QString &avatarPath, const QString type, const QString datatype, QString from);
 
+    void toggleMaximize();
+    void setRoundedCorners(int radius);
+
+
     //void setupDragAndDrop();
     //void dragEnterEvent(QDragEnterEvent *event);
     //void dropEvent(QDropEvent *event);

@@ -4,4 +4,12 @@
         <file>avatar.png</file>
         <file>file.png</file>
     </qresource>
+    <qresource prefix="/style">
+        <file>style.qss</file>
+    </qresource>
+    <qresource prefix="/window">
+        <file>close.png</file>
+        <file>minimize.png</file>
+        <file>maximize.png</file>
+    </qresource>
 </RCC>

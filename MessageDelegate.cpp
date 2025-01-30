@@ -14,7 +14,7 @@ MessageDelegate::MessageDelegate(QObject *parent)
 
 int calculateTextWidth(const QString &text) {
 
-    QFont font("Arial", 12);  // 使用 Arial 字体，字号为 12
+    QFont font("Microsoft YaHei", 14);  // 使用 Arial 字体，字号为 12
 
 
     // 创建 QFontMetrics 对象，使用指定的字体
@@ -42,8 +42,8 @@ void drawWrappedText(QPainter *painter, const QRect &textRect, const QString &te
 
     // 設定字型和大小
     QFont font;
-    font.setFamily("Arial");  // 設置字型
-    font.setPointSize(12);    // 設置字體大小
+    font.setFamily("Microsoft YaHei");  // 設置字型
+    font.setPointSize(14);    // 設置字體大小
     painter->setFont(font);   // 將字型設置到畫家
 
     // 創建文本選項，這樣可以讓文本自動換行
@@ -56,6 +56,8 @@ void drawWrappedText(QPainter *painter, const QRect &textRect, const QString &te
 
 void MessageDelegate::paint(QPainter *painter, const QStyleOptionViewItem &option, const QModelIndex &index) const
 {
+
+
     // 根據自定義角色判斷消息類型
     QString messageType = index.data(DirectionTypeRole).toString();// sent or receive
     // 獲取消息內容和頭像
@@ -119,28 +121,30 @@ void MessageDelegate::paint(QPainter *painter, const QStyleOptionViewItem &optio
     }
 
 
+    if(dataType == "file"){
+        // 繪製進度條
+        int progress = index.data(ProgressRole).toInt(); // 取得進度值
 
-    // 繪製進度條
-    int progress = index.data(ProgressRole).toInt(); // 取得進度值
+        QRect progressRect = bubbleRect;
+        progressRect.setTop(bubbleRect.bottom() + 5); // 在文件圖標下方
+        progressRect.setHeight(10); // 進度條高度
+        progressRect.setLeft(progressRect.left() + 5);
+        progressRect.setRight(progressRect.right() - 5);
 
-    QRect progressRect = bubbleRect;
-    progressRect.setTop(bubbleRect.bottom() + 5); // 在文件圖標下方
-    progressRect.setHeight(10); // 進度條高度
-    progressRect.setLeft(progressRect.left() + 5);
-    progressRect.setRight(progressRect.right() - 5);
+        painter->setBrush(Qt::gray); // 進度條背景
+        painter->drawRect(progressRect);
 
-    painter->setBrush(Qt::gray); // 進度條背景
-    painter->drawRect(progressRect);
+        QRect progressFillRect = progressRect;
+        progressFillRect.setWidth(progressRect.width() * progress / 100); // 根據進度調整寬度
+        painter->setBrush(Qt::blue); // 進度條填充顏色
+        painter->drawRect(progressFillRect);
+    }
 
-    QRect progressFillRect = progressRect;
-    progressFillRect.setWidth(progressRect.width() * progress / 100); // 根據進度調整寬度
-    painter->setBrush(Qt::blue); // 進度條填充顏色
-    painter->drawRect(progressFillRect);
 
 
 
     // 根據消息類型設置不同底色
-    QColor backgroundColor = (messageType == "sent") ? QColor(0, 240, 0, 100) : QColor(220, 220, 220, 100);
+    QColor backgroundColor = (messageType == "sent") ? QColor(180, 150, 255, 180) : QColor(200, 200, 200, 180);
 
 
 

@@ -13,6 +13,13 @@ MainWindow::MainWindow(QWidget *parent)
     ui->setupUi(this);
     ui->clientName->setText("Client");
 
+    setWindowFlags(Qt::FramelessWindowHint);
+    setRoundedCorners(10);
+    // 連接 TitleBar 按鈕的信號與 MainWindow 的槽函數
+    connect(ui->minimize, &QPushButton::clicked, this, &MainWindow::showMinimized);
+    connect(ui->maximize, &QPushButton::clicked, this, &MainWindow::toggleMaximize);
+    connect(ui->close, &QPushButton::clicked, this, &MainWindow::close);
+
 
     connect(socket, &QTcpSocket::connected, []() {
         qDebug() << "Connected to server!";
@@ -42,6 +49,8 @@ MainWindow::MainWindow(QWidget *parent)
 
     qDebug()<<socket;
 
+
+    connect(ui->msgEdit, &CustomTextEdit::enterPressed, this, &MainWindow::on_sended);
 
     // 發送按鈕點擊事件
     connect(ui->sendButton, &QPushButton::clicked, this, &MainWindow::on_sended);
@@ -190,6 +199,8 @@ void MainWindow::on_received()
 
 
 void MainWindow::on_sended(){
+
+
     QString tmpdst = getSelectedRowId();
     if(tmpdst != "")//如果有選擇傳送對象，更新dst
         dst = tmpdst;
@@ -212,6 +223,8 @@ void MainWindow::on_sended(){
     } else {
         qDebug() << "Not connected to server!";
     }
+
+    ui->msgEdit->clear();//發送訊息後清空輸入欄
 }
 
 QString MainWindow::getSelectedRowId()
@@ -452,6 +465,25 @@ void MainWindow::recvFileFromServer(const QByteArray &byteArray, QModelIndex ind
         file.close();
     }
 }
+
+
+
+
+void MainWindow::toggleMaximize() {
+    if (isMaximized()) {
+        showNormal();  // 取消最大化
+    } else {
+        showMaximized();  // 最大化
+    }
+}
+
+void MainWindow::setRoundedCorners(int radius) {
+    QPainterPath path;
+    path.addRoundedRect(this->rect(), radius, radius);
+    QRegion mask(path.toFillPolygon().toPolygon());
+    this->setMask(mask);
+}
+
 MainWindow::~MainWindow()
 {
     delete ui;

@@ -16,7 +16,9 @@ SOURCES += \
 
 HEADERS += \
     ContactsDelegate.h \
+    CustomTextEdit.h \
     MessageDelegate.h \
+    TitleBar.h \
     mainwindow.h
 
 FORMS += \
@@ -29,3 +31,6 @@ else: unix:!android: target.path = /opt/$${TARGET}/bin
 
 RESOURCES += \
     res.qrc
+
+DISTFILES += \
+    style.qss
