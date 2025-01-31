@@ -13,7 +13,7 @@ public:
 protected:
     void paintEvent(QPaintEvent *event) override {
         QPainter painter(this);
-        painter.fillRect(this->rect(), Qt::black); // 強制背景黑色
+        painter.fillRect(this->rect(), QColor(19, 19, 19));  // 背景黑色
     }
 
     void mousePressEvent(QMouseEvent *event) override {

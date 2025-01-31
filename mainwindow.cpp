@@ -13,12 +13,17 @@ MainWindow::MainWindow(QWidget *parent)
     ui->setupUi(this);
     ui->clientName->setText("Client");
 
+
+    //TitleBar
     setWindowFlags(Qt::FramelessWindowHint);
     setRoundedCorners(10);
-    // 連接 TitleBar 按鈕的信號與 MainWindow 的槽函數
     connect(ui->minimize, &QPushButton::clicked, this, &MainWindow::showMinimized);
     connect(ui->maximize, &QPushButton::clicked, this, &MainWindow::toggleMaximize);
     connect(ui->close, &QPushButton::clicked, this, &MainWindow::close);
+
+
+    ui->contacts->setFocusPolicy(Qt::NoFocus);//移除ListView選中項目的虛線
+
 
 
     connect(socket, &QTcpSocket::connected, []() {
@@ -36,24 +41,19 @@ MainWindow::MainWindow(QWidget *parent)
         json["type"] = "name";
         json["content"] = ui->clientName->text();
 
-        // 將 JSON 對象轉為byte array
-        QJsonDocument doc(json);
-        QByteArray jsonData = doc.toJson(QJsonDocument::Compact);
-
-        // 發送 JSON 數據
-        socket->write(jsonData);
+        JsonSend(json);
     });
 
 
     socket->connectToHost(QHostAddress("127.0.0.1"), 9527);
 
-    qDebug()<<socket;
 
-
-    connect(ui->msgEdit, &CustomTextEdit::enterPressed, this, &MainWindow::on_sended);
 
     // 發送按鈕點擊事件
     connect(ui->sendButton, &QPushButton::clicked, this, &MainWindow::on_sended);
+    connect(ui->msgEdit, &CustomTextEdit::enterPressed, this, &MainWindow::on_sended);
+
+
 
     // TCP接收事件
     connect(socket, &QTcpSocket::readyRead, this, &MainWindow::on_received);
@@ -89,33 +89,13 @@ void MainWindow::on_received()
     QByteArray data = socket->readAll();
 
 
-
     if(filereceivemode){
         recvFileFromServer(data, file_index, file_from);
         return;
     }
 
-
-
-
-
-    qDebug() << "Received message:" << data;
-
-    // 解析 JSON 數據
-    QJsonDocument jsonDoc = QJsonDocument::fromJson(data);
-    if (jsonDoc.isNull()) {
-        qDebug() << "Failed to create JSON doc.";
-        return;
-    }
-
-    // 檢查 JSON 是否為對象
-    if (!jsonDoc.isObject()) {
-        qDebug() << "JSON is not an object.";
-        return;
-    }
-
     // 取得 JSON 對象
-    QJsonObject jsonObj = jsonDoc.object();
+    QJsonObject jsonObj = JsonRecv(data);
 
     // 存取 JSON 數據
     QString type = jsonObj["type"].toString();
@@ -153,7 +133,7 @@ void MainWindow::on_received()
             ui->chatroom->setModel(chat_models[myid]);
         }
     }
-    else if(type == "msg"){
+    else if(type == MSG){
         QString from = jsonObj["from"].toString();
         QString message = jsonObj["content"].toString();
         dst = from;//收到來自from的訊息後，自動把下次傳送對象設定為from
@@ -200,13 +180,13 @@ void MainWindow::on_received()
 
 void MainWindow::on_sended(){
 
-
-    QString tmpdst = getSelectedRowId();
-    if(tmpdst != "")//如果有選擇傳送對象，更新dst
+    //如果有選擇傳送對象，更新dst
+    QString tmpdst = getSelectedContactId();
+    if(tmpdst != "")
         dst = tmpdst;
 
     QJsonObject json;
-    json["type"] = "msg";  // 類型為msg
+    json["type"] = MSG;  // 類型為msg
     json["from"] = myid;
     json["to"] = dst; //發送到目的client
     json["content"] = ui->msgEdit->toPlainText();//訊息內容
@@ -214,20 +194,80 @@ void MainWindow::on_sended(){
 
 
     if (socket->state() == QAbstractSocket::ConnectedState && !myid.isEmpty()) {
-        // 將 JSON 對象轉為byte array
-        QJsonDocument doc(json);
-        QByteArray jsonData = doc.toJson(QJsonDocument::Compact);
-        socket->write(jsonData);
-
+        JsonSend(json);
         sendMessage(ui->msgEdit->toPlainText(), ":/icon/avatar.png", "sent", "text", dst);
-    } else {
-        qDebug() << "Not connected to server!";
     }
+    else
+        qDebug() << "Not connected to server!";
+
 
     ui->msgEdit->clear();//發送訊息後清空輸入欄
 }
 
-QString MainWindow::getSelectedRowId()
+
+
+QModelIndex MainWindow::sendMessage(const QString &message, const QString &avatarPath, const QString type, const QString datatype, QString to)
+{
+    if(dst != "")
+        ui->current_contact->setText( "#" + to + current_contacts[to] ); //標籤更新成聊天對象名稱
+
+    // 設置自定義角色值
+    QStandardItem *item = new QStandardItem();
+
+    item->setData(message, MessageDelegate::TextRole);
+    item->setData(QPixmap(avatarPath), Qt::DecorationRole);
+    item->setData(type, MessageDelegate::DirectionTypeRole);
+    item->setData(datatype, MessageDelegate::DataTypeRole);
+
+    if(!chat_models.contains(to)){
+        chat_models[to] = new QStandardItemModel(this);
+    }
+
+    ui->chatroom->setModel(chat_models[to]);
+
+
+    // 添加到模型中
+    chat_models[to]->appendRow(item);
+
+    QModelIndex rowIndex = chat_models[to]->indexFromItem(item);//插入的row位置
+
+    // 自動滾動到底部
+    ui->chatroom->scrollTo(chat_models[to]->index(chat_models[to]->rowCount() - 1, 0), QAbstractItemView::PositionAtBottom);
+
+    return rowIndex;
+}
+
+QModelIndex MainWindow::recvMessage(const QString &message, const QString &avatarPath, const QString type, const QString datatype, QString from)
+{
+    ui->current_contact->setText( "#" + from + current_contacts[from] );//標籤更新成聊天對象名稱
+
+
+    // 設置自定義角色值
+    QStandardItem *item = new QStandardItem();
+
+    item->setData(message, MessageDelegate::TextRole);    // 設置消息內容
+    item->setData(QPixmap(avatarPath), Qt::DecorationRole);  // 設置頭像
+    item->setData(type, MessageDelegate::DirectionTypeRole);  // 設置消息類型：sent 或 receive
+    item->setData(datatype, MessageDelegate::DataTypeRole);
+
+    if(!chat_models.contains(from)){
+        chat_models[from] = new QStandardItemModel(this);
+    }
+
+    ui->chatroom->setModel(chat_models[from]);
+
+    chat_models[from]->appendRow(item);
+
+    QModelIndex rowIndex = chat_models[from]->indexFromItem(item);//插入的row位置
+
+    // 自動滾動到底部
+    ui->chatroom->scrollTo(chat_models[from]->index(chat_models[from]->rowCount() - 1, 0), QAbstractItemView::PositionAtBottom);
+
+    return rowIndex;
+}
+
+
+QString MainWindow::getSelectedContactId()
 {
      // 取得 QListView 的選擇模型
      QItemSelectionModel *selectionModel = ui->contacts->selectionModel();
@@ -264,95 +304,14 @@ QString MainWindow::getSelectedRowId()
      }
 }
 
-QModelIndex MainWindow::sendMessage(const QString &message, const QString &avatarPath, const QString type, const QString datatype, QString to)
-{
-    if(dst != "")
-        ui->current_contact->setText( "#" + to + current_contacts[to] ); //標籤更新成聊天對象名稱
-
-    // 設置自定義角色值
-    QStandardItem *item = new QStandardItem();
-
-    item->setData(message, Qt::DisplayRole);
-    item->setData(QPixmap(avatarPath), Qt::DecorationRole);
-    item->setData(type, MessageDelegate::DirectionTypeRole);
-    item->setData(datatype, MessageDelegate::DataTypeRole);
-
-    if(!chat_models.contains(to)){
-        chat_models[to] = new QStandardItemModel(this);
-    }
-
-    ui->chatroom->setModel(chat_models[to]);
-
-
-    // 添加到模型中
-    chat_models[to]->appendRow(item);
-
-    QModelIndex rowIndex = chat_models[to]->indexFromItem(item);//插入的row位置
-
-    // 自動滾動到底部
-    ui->chatroom->scrollTo(chat_models[to]->index(chat_models[to]->rowCount() - 1, 0), QAbstractItemView::PositionAtBottom);
-
-    return rowIndex;
-}
-
-QModelIndex MainWindow::recvMessage(const QString &message, const QString &avatarPath, const QString type, const QString datatype, QString from)
-{
-    ui->current_contact->setText( "#" + from + current_contacts[from] );//標籤更新成聊天對象名稱
-
-
-    // 設置自定義角色值
-    QStandardItem *item = new QStandardItem();
-
-    item->setData(message, Qt::DisplayRole);    // 設置消息內容
-    item->setData(QPixmap(avatarPath), Qt::DecorationRole);  // 設置頭像
-    item->setData(type, MessageDelegate::DirectionTypeRole);  // 設置消息類型：sent 或 receive
-    item->setData(datatype, MessageDelegate::DataTypeRole);
-
-    if(!chat_models.contains(from)){
-        chat_models[from] = new QStandardItemModel(this);
-    }
-
-    ui->chatroom->setModel(chat_models[from]);
-
-    chat_models[from]->appendRow(item);
-
-    QModelIndex rowIndex = chat_models[from]->indexFromItem(item);//插入的row位置
-
-    // 自動滾動到底部
-    ui->chatroom->scrollTo(chat_models[from]->index(chat_models[from]->rowCount() - 1, 0), QAbstractItemView::PositionAtBottom);
-
-    return rowIndex;
-}
-
-/*
-void MainWindow::setupDragAndDrop() {
-    ui->msgEdit->setAcceptDrops(true);
-}
-
-void MainWindow::dragEnterEvent(QDragEnterEvent *event) {
-    if (event->mimeData()->hasUrls()) {
-        event->acceptProposedAction();
-    }
-}
-
-void MainWindow::dropEvent(QDropEvent *event) {
-    const QMimeData *mimeData = event->mimeData();
-    if (mimeData->hasUrls()) {
-        QList<QUrl> urlList = mimeData->urls();
-        if (!urlList.isEmpty()) {
-            QString filePath = urlList.first().toLocalFile();
-            sendFileToServer(filePath);
-        }
-    }
-}
-*/
-
-//切換聊天室
+//切換聊天對象
 void MainWindow::onContactsClicked(){
-    dst = getSelectedRowId();
+    dst = getSelectedContactId();
     ui->chatroom->setModel(chat_models[dst]);//切換聊天室
     ui->current_contact->setText("#" + dst + current_contacts[dst]);
 }
+
+
 
 
 // 點擊後傳輸檔案
@@ -367,7 +326,6 @@ void MainWindow::onSendFileButtonClicked() {
     }
 }
 
-
 // 傳輸檔案
 void MainWindow::sendFileToServer(const QString &filePath, QModelIndex index, QString to) {
     QtConcurrent::run([=]() {
@@ -381,7 +339,7 @@ void MainWindow::sendFileToServer(const QString &filePath, QModelIndex index, QS
         json["type"] = "file_upload";
         json["file_name"] = fileName;
         json["file_size"] = fileSize;
-        dst = getSelectedRowId();
+        dst = getSelectedContactId();
         json["from"] = myid;
         json["to"] = dst;
 
@@ -422,6 +380,7 @@ void MainWindow::sendFileToServer(const QString &filePath, QModelIndex index, QS
     });
 }
 
+// 接收檔案
 void MainWindow::recvFileFromServer(const QByteArray &byteArray, QModelIndex index, QString from) {
 
 
@@ -468,6 +427,35 @@ void MainWindow::recvFileFromServer(const QByteArray &byteArray, QModelIndex ind
 
 
 
+
+void MainWindow::JsonSend(QJsonObject json){
+    // 將 JSON 對象轉為byte array
+    QJsonDocument doc(json);
+    QByteArray jsonData = doc.toJson(QJsonDocument::Compact);
+
+    // 發送 JSON 數據
+    socket->write(jsonData);
+}
+
+QJsonObject MainWindow::JsonRecv(QByteArray data)
+{
+    qDebug() << "Received data:" << data;
+
+    // 解析 JSON 數據
+    QJsonDocument jsonDoc = QJsonDocument::fromJson(data);
+    if (jsonDoc.isNull()) {
+        qDebug() << "Failed to create JSON doc.";
+        return QJsonObject();
+    }
+
+    // 檢查 JSON 是否為對象
+    if (!jsonDoc.isObject()) {
+        qDebug() << "JSON is not an object.";
+        return QJsonObject();
+    }
+
+    return jsonDoc.object();
+}
 
 void MainWindow::toggleMaximize() {
     if (isMaximized()) {

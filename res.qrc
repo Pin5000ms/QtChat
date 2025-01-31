@@ -3,13 +3,15 @@
         <file>chat.png</file>
         <file>avatar.png</file>
         <file>file.png</file>
+        <file>send.png</file>
+        <file>add.png</file>
     </qresource>
     <qresource prefix="/style">
         <file>style.qss</file>
     </qresource>
     <qresource prefix="/window">
         <file>close.png</file>
-        <file>minimize.png</file>
         <file>maximize.png</file>
+        <file>minimize.png</file>
     </qresource>
 </RCC>

@@ -43,6 +43,9 @@ public:
     ~MainWindow();
 
 private:
+
+    const QString MSG = "msg";
+
     Ui::MainWindow *ui;
     //QStandardItemModel *chat_model;
     QString myid;
@@ -51,17 +54,17 @@ private:
     QStandardItemModel *contact_model;
     QMap<QString, QString> current_contacts;
     QTcpSocket *socket;
-    QString getSelectedRowId();
+
+    void JsonSend(QJsonObject json);
+    QJsonObject JsonRecv(QByteArray data);
+
+    QString getSelectedContactId();
     QModelIndex sendMessage(const QString &message, const QString &avatarPath, const QString type, const QString datatype, QString to);
     QModelIndex recvMessage(const QString &message, const QString &avatarPath, const QString type, const QString datatype, QString from);
 
-    void toggleMaximize();
-    void setRoundedCorners(int radius);
 
 
-    //void setupDragAndDrop();
-    //void dragEnterEvent(QDragEnterEvent *event);
-    //void dropEvent(QDropEvent *event);
+
     void onSendFileButtonClicked();
     void sendFileToServer(const QString &filePath, QModelIndex index, QString to);
     void recvFileFromServer(const QByteArray &byteArray, QModelIndex index, QString from);
@@ -73,6 +76,10 @@ private:
     int offset = 0;
     QString recv_file_name;
     QByteArray receiveBuffer;
+
+
+    void toggleMaximize();
+    void setRoundedCorners(int radius);
 
 private slots:
     void on_received();  // 槽函數

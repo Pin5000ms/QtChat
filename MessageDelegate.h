@@ -11,6 +11,7 @@ public:
 
     // 在 QStandardItemModel 中設定自定義角色
     enum MessageRoles {
+        TextRole,
         DirectionTypeRole = Qt::UserRole + 1,  // sent or receive
         DataTypeRole,  // 檔案or訊息
         AvatarRole,
