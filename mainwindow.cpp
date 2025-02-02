@@ -466,10 +466,20 @@ void MainWindow::toggleMaximize() {
 }
 
 void MainWindow::setRoundedCorners(int radius) {
-    QPainterPath path;
-    path.addRoundedRect(this->rect(), radius, radius);
-    QRegion mask(path.toFillPolygon().toPolygon());
-    this->setMask(mask);
+    if (isMaximized()) {
+        this->clearMask(); // 最大化時移除圓角
+    } else {
+        QPainterPath path;
+        path.addRoundedRect(this->rect(), radius, radius);
+        QRegion mask(path.toFillPolygon().toPolygon());
+        this->setMask(mask);
+    }
+}
+
+
+void MainWindow::resizeEvent(QResizeEvent *event) {
+    QMainWindow::resizeEvent(event);  // 呼叫基類方法
+    setRoundedCorners(10);  // 重新設定圓角 (15px 可調整)
 }
 
 MainWindow::~MainWindow()

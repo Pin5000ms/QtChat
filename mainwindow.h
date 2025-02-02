@@ -80,6 +80,7 @@ private:
 
     void toggleMaximize();
     void setRoundedCorners(int radius);
+    void resizeEvent(QResizeEvent *event);
 
 private slots:
     void on_received();  // 槽函數

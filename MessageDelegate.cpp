@@ -21,24 +21,48 @@ int calculateTextWidth(const QString &text) {
     QFontMetrics metrics(font);
 
     // 计算文本的宽度
-    int textWidth = metrics.horizontalAdvance(text + " ");//" "為margin
+    int textWidth = metrics.horizontalAdvance(text);//" "為margin
 
     // 输出宽度
-    qDebug() << "Text width:" << textWidth << "pixels";
+    //qDebug() << "Text width:" << textWidth << "pixels";
 
     return textWidth;
 }
 
-void drawWrappedText(QPainter *painter, const QRect &textRect, const QString &text)
+
+QString GenWrappedText(const QRect &bubbleRect, const QString &text)
 {
-    int maxLineLength = 33;  // 每行最多顯示35個字符
+    int maxWidth = bubbleRect.width() - 21;
     QString wrappedText;
 
-    // 循環處理字符串，按每33個字符分割
-    for (int i = 0; i < text.length(); i += maxLineLength) {
-        // 使用 mid() 方法獲取每段文本並添加換行符
-        wrappedText += text.mid(i, maxLineLength) + "\n";
+    int sum = 0;
+
+
+    // 循環處理字符串，sum一旦超出maxWidth，加入換行符，重置sum
+    for (int i = 0; i < text.length(); i++) {
+        sum += calculateTextWidth(text[i]);
+        wrappedText += text[i];
+        if(sum >= maxWidth)
+        {
+            sum = 0;
+            wrappedText += "\n";
+        }
     }
+
+    return wrappedText;
+}
+
+
+void DrawWrappedText(const QRect &bubbleRect, QPainter *painter, const QString &text)
+{
+
+    //margin
+    QRect textRect = bubbleRect;//option.rect;
+    textRect.setLeft(bubbleRect.left() + 10);
+    textRect.setTop(bubbleRect.top() + 10);
+
+
+    QString wrappedText = GenWrappedText(bubbleRect, text);
 
     // 設定字型和大小
     QFont font;
@@ -52,20 +76,101 @@ void drawWrappedText(QPainter *painter, const QRect &textRect, const QString &te
 
     // 繪製文本
     painter->drawText(textRect, wrappedText, textOption);
+
 }
+
+
+
+//設定包圍訊息的聊天氣泡的邊界
+void SetTextBubble(QRect& bubbleRect, QString text, QString direction)
+{
+    int textWidth = calculateTextWidth(text);
+    QRect itemRect = bubbleRect;
+
+    // 設定範圍
+    if(direction == "sent"){
+        int origin = itemRect.right() - 10;// - AVATARW;
+        bubbleRect.setRight(origin);
+
+        if(textWidth < itemRect.width() * 0.8)
+            bubbleRect.setLeft(origin - textWidth - 20);
+        else
+            bubbleRect.setLeft(origin - itemRect.width() * 0.8);
+    }
+    else if (direction == "receive"){
+        int origin = itemRect.left() + AVATARW + 10;
+        bubbleRect.setLeft(origin);
+
+        if(textWidth < itemRect.width() * 0.8)
+            bubbleRect.setRight(origin + textWidth + 20);
+        else
+            bubbleRect.setRight(origin + itemRect.width() * 0.8);
+    }
+
+    qDebug()<<"SetTextBubble bubbleRect : "<<bubbleRect.width();
+}
+
+//設定包圍file圖示的聊天氣泡的邊界
+void SetFileBubble(QRect& bubbleRect, QPainter *&painter, QString direction)
+{
+    const int fileIconWidth = 75;
+    QRect itemRect = bubbleRect;
+
+    QPixmap filePixmap(":/icon/file.png");
+    if(direction == "sent"){
+        int origin = itemRect.right() - 10;// - AVATARW;
+        bubbleRect.setRight(origin);
+        bubbleRect.setLeft(origin - fileIconWidth - 10);
+    }
+    else if (direction == "receive"){
+        int origin = itemRect.left() + AVATARW + 10;
+        bubbleRect.setLeft(origin);
+        bubbleRect.setRight(origin + fileIconWidth + 10);
+        //如何在下方新增 接收 取消 兩個按鈕?
+    }
+    painter->drawPixmap(bubbleRect, filePixmap);
+}
+
+
+void DrawProgress(QRect& bubbleRect, QPainter *&painter, int progress)
+{
+    QRect progressRect = bubbleRect;
+    progressRect.setTop(bubbleRect.bottom() + 5); // 在文件圖標下方
+    progressRect.setHeight(10); // 進度條高度
+    progressRect.setLeft(progressRect.left() + 5);
+    progressRect.setRight(progressRect.right() - 5);
+
+    painter->setBrush(Qt::gray); // 進度條背景
+    painter->drawRect(progressRect);
+
+    QRect progressFillRect = progressRect;
+    progressFillRect.setWidth(progressRect.width() * progress / 100); // 根據進度調整寬度
+    painter->setBrush(Qt::blue); // 進度條填充顏色
+    painter->drawRect(progressFillRect);
+}
+
+
+void DrawBubble(QRect& bubbleRect, QPainter *&painter, QString direction)
+{
+    // 根據消息類型設置不同底色
+    QColor backgroundColor = (direction == "sent") ? QColor(180, 150, 255, 180) : QColor(200, 200, 200, 180);
+    // 設置圓角背景顏色
+    QPainterPath path;
+    path.addRoundedRect(bubbleRect, 10, 10);  // 設置圓角
+    painter->fillPath(path, backgroundColor); // 填充背景顏色
+}
+
+
 
 void MessageDelegate::paint(QPainter *painter, const QStyleOptionViewItem &option, const QModelIndex &index) const
 {
 
-
     // 根據自定義角色判斷消息類型
-    QString messageType = index.data(DirectionTypeRole).toString();// sent or receive
+    QString messageDirection = index.data(DirectionTypeRole).toString();// sent or receive
     // 獲取消息內容和頭像
     QString text = index.data(Qt::DisplayRole).toString();
     QPixmap avatar = index.data(Qt::DecorationRole).value<QPixmap>();
-
     QString dataType = index.data(DataTypeRole).toString();
-
 
 
     QStyleOptionViewItem newOption(option);
@@ -74,102 +179,38 @@ void MessageDelegate::paint(QPainter *painter, const QStyleOptionViewItem &optio
     QRect itemRect = newOption.rect;//高度從sizeHint來的
     itemRect.setTop(itemRect.top() + 10);  // Top margin
     itemRect.setBottom(itemRect.bottom() - 10);  // Bottom margin
+    QRect bubbleRect = itemRect;
 
 
 
-    QRect bubbleRect = itemRect;//option.rect;
 
 
-    if(dataType == "text"){
-        int textWidth = calculateTextWidth(text);
-        // 設定範圍
-        if(messageType == "sent"){
-            int origin = itemRect.right() - 10;// - AVATARW;
-            bubbleRect.setRight(origin);
+    if(dataType == "text")
+    {
+        SetTextBubble(bubbleRect, text, messageDirection);
 
-            if(textWidth < itemRect.width()*0.8)
-                bubbleRect.setLeft(origin - textWidth - 10);
-            else
-                bubbleRect.setLeft(itemRect.center().x() + 10);
-        }
-        else if (messageType == "receive"){
-            int origin = itemRect.left() + AVATARW + 10;
-            bubbleRect.setLeft(origin);
+        DrawBubble(bubbleRect, painter, messageDirection);
 
-            if(textWidth < itemRect.width()*0.8)
-                bubbleRect.setRight(origin + textWidth + 10);
-            else
-                bubbleRect.setRight(itemRect.center().x() - 10);
-        }
+        DrawWrappedText(bubbleRect, painter, text);
     }
-    else if(dataType == "file"){
-        const int fileIconWidth = 75;
-        QPixmap filePixmap(":/icon/file.png");
-        if(messageType == "sent"){
-            int origin = itemRect.right() - 10;// - AVATARW;
-            bubbleRect.setRight(origin);
-            bubbleRect.setLeft(origin - fileIconWidth - 10);
-        }
-        else if (messageType == "receive"){
-            int origin = itemRect.left() + AVATARW + 10;
-            bubbleRect.setLeft(origin);
-            bubbleRect.setRight(origin + fileIconWidth + 10);
-            //如何在下方新增 接收 取消 兩個按鈕?
-        }
-        painter->drawPixmap(bubbleRect, filePixmap);
+    else if(dataType == "file")
+    {
+        SetFileBubble(bubbleRect, painter, messageDirection);
 
-    }
+        DrawBubble(bubbleRect, painter, messageDirection);
 
-
-    if(dataType == "file"){
-        // 繪製進度條
         int progress = index.data(ProgressRole).toInt(); // 取得進度值
-
-        QRect progressRect = bubbleRect;
-        progressRect.setTop(bubbleRect.bottom() + 5); // 在文件圖標下方
-        progressRect.setHeight(10); // 進度條高度
-        progressRect.setLeft(progressRect.left() + 5);
-        progressRect.setRight(progressRect.right() - 5);
-
-        painter->setBrush(Qt::gray); // 進度條背景
-        painter->drawRect(progressRect);
-
-        QRect progressFillRect = progressRect;
-        progressFillRect.setWidth(progressRect.width() * progress / 100); // 根據進度調整寬度
-        painter->setBrush(Qt::blue); // 進度條填充顏色
-        painter->drawRect(progressFillRect);
+        DrawProgress(bubbleRect, painter, progress);
     }
 
 
-
-
-    // 根據消息類型設置不同底色
-    QColor backgroundColor = (messageType == "sent") ? QColor(180, 150, 255, 180) : QColor(200, 200, 200, 180);
-
-
-
-    // 設置圓角背景顏色
-    QPainterPath path;
-    path.addRoundedRect(bubbleRect, 10, 10);  // 設置圓角
-    painter->fillPath(path, backgroundColor); // 填充背景顏色
-
-
-    if(dataType == "text"){
-
-        //margin
-        QRect textRect = bubbleRect;//option.rect;
-        textRect.setLeft(bubbleRect.left() + 10);
-        textRect.setTop(bubbleRect.top() + 10);
-
-        drawWrappedText(painter, textRect, text);
-    }
 
 
 
     // 根據消息類型決定頭像的位置
-    int avatarX = (messageType == "sent") ? option.rect.right() - AVATARW : option.rect.left() + 10;
+    int avatarX = (messageDirection == "sent") ? option.rect.right() - AVATARW : option.rect.left() + 10;
     QRect avatarRect(avatarX, option.rect.top() + 5, AVATARW, AVATARW);
-    if(messageType == "receive")
+    if(messageDirection == "receive")
         painter->drawPixmap(avatarRect, avatar);  // 繪製頭像
 
 }
@@ -177,25 +218,33 @@ void MessageDelegate::paint(QPainter *painter, const QStyleOptionViewItem &optio
 
 
 
-int getRequiredLines(const QString &text) {
-    const int charsPerLine = 29;  // 每行总计字符宽度为30个字节
-    int totalWidth = 0;
+int getRequiredLines(QRect& itemRect, const QString &text) {
 
-    // 遍历字符串中的每个字符
-    for (int i = 0; i < text.length(); ++i) {
-        QChar ch = text[i];
+    int textWidth = calculateTextWidth(text);
+    int maxWidth = 0;
 
-        // 判断是否是中文字符（通常在Unicode范围内）
-        if (ch.unicode() >= 0x4E00 && ch.unicode() <= 0x9FFF) {
-            totalWidth += 2;  // 中文字符算作2字节宽度
-        } else {
-            totalWidth += 1;  // 其他字符算作1字节宽度
+    if(textWidth < itemRect.width() * 0.8)
+        maxWidth = textWidth + 20;
+    else
+        maxWidth = itemRect.width() * 0.8;
+
+
+
+    int lines = 1;
+    int sum = 0;
+
+
+    qDebug()<<"getRequiredLines itemRect : "<<itemRect.width();
+    for (int i = 0; i < text.length(); i++) {
+        sum += calculateTextWidth(text[i]);
+        if(sum >= maxWidth)
+        {
+            sum = 0;
+            lines++;
         }
     }
+    return lines;
 
-    // 计算所需行数，向上取整
-    int requiredLines = (totalWidth + charsPerLine - 1) / charsPerLine;
-    return requiredLines;
 }
 
 QSize MessageDelegate::sizeHint(const QStyleOptionViewItem &option, const QModelIndex &index) const
@@ -206,14 +255,18 @@ QSize MessageDelegate::sizeHint(const QStyleOptionViewItem &option, const QModel
     if(dataType == "file"){
         return QSize(option.rect.width(), 120);
     }
-    // 根據每行30個字元來計算所需行數
-    int requiredLines = getRequiredLines(text);
 
-    // 假設每行的高度是 20px
-    int lineHeight = 33;
+    QRect itemRect = option.rect;
+    int requiredLines = getRequiredLines(itemRect, text);
+
+
+    QFont font("Microsoft YaHei", 14);
+    QFontMetrics metrics(font);
+
+    int lineHeight = metrics.lineSpacing();
 
     // 計算所需的總高度：每行的高度 * 行數
-    int totalHeight = requiredLines * lineHeight + 30;
+    int totalHeight = requiredLines * lineHeight + 40;
 
     //qDebug()<<totalHeight;
 
