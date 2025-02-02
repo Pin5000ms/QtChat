@@ -32,7 +32,7 @@ int calculateTextWidth(const QString &text) {
 
 QString GenWrappedText(const QRect &bubbleRect, const QString &text)
 {
-    int maxWidth = bubbleRect.width() - 21;
+    int maxWidth = bubbleRect.width() - 25;
     QString wrappedText;
 
     int sum = 0;
@@ -224,9 +224,9 @@ int getRequiredLines(QRect& itemRect, const QString &text) {
     int maxWidth = 0;
 
     if(textWidth < itemRect.width() * 0.8)
-        maxWidth = textWidth + 20;
+        maxWidth = textWidth + 1;
     else
-        maxWidth = itemRect.width() * 0.8;
+        maxWidth = itemRect.width() * 0.8 + 1;
 
 
 
