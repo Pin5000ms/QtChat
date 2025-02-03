@@ -408,7 +408,7 @@ void MainWindow::recvFileFromServer(const QByteArray &byteArray, QModelIndex ind
 
 
             // 更新模型中的進度
-            int newProgressValue = offset*100/file_size;
+            int newProgressValue = static_cast<float>(offset)*100/file_size;
             chat_models[from]->setData(index, newProgressValue, MessageDelegate::ProgressRole);
             ui->chatroom->viewport()->update();
 

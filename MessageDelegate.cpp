@@ -32,7 +32,7 @@ int calculateTextWidth(const QString &text) {
 
 QString GenWrappedText(const QRect &bubbleRect, const QString &text)
 {
-    int maxWidth = bubbleRect.width() - 25;
+    int maxWidth = bubbleRect.width() - 30;
     QString wrappedText;
 
     int sum = 0;
@@ -135,17 +135,23 @@ void SetFileBubble(QRect& bubbleRect, QPainter *&painter, QString direction)
 void DrawProgress(QRect& bubbleRect, QPainter *&painter, int progress)
 {
     QRect progressRect = bubbleRect;
-    progressRect.setTop(bubbleRect.bottom() + 5); // 在文件圖標下方
-    progressRect.setHeight(10); // 進度條高度
-    progressRect.setLeft(progressRect.left() + 5);
-    progressRect.setRight(progressRect.right() - 5);
+    int top = bubbleRect.bottom() + 5;// 在文件圖標下方
+    int bot = bubbleRect.bottom() + 15;
+    int origin = progressRect.left() + 5;
+    int end = progressRect.right() - 5;
+
+    progressRect.setTop(top);
+    progressRect.setBottom(bot);
+    progressRect.setLeft(origin);
+    progressRect.setRight(end);
 
     painter->setBrush(Qt::gray); // 進度條背景
     painter->drawRect(progressRect);
 
     QRect progressFillRect = progressRect;
-    progressFillRect.setWidth(progressRect.width() * progress / 100); // 根據進度調整寬度
-    painter->setBrush(Qt::blue); // 進度條填充顏色
+    progressFillRect.setLeft(origin);
+    progressFillRect.setRight(origin + progressRect.width() * progress / 100); // 根據進度調整寬度
+    painter->setBrush(QColor(180, 150, 255, 180)); // 進度條填充顏色
     painter->drawRect(progressFillRect);
 }
 
