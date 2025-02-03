@@ -84,10 +84,10 @@ background-color: rgba(255, 255, 255, 0);
          </property>
          <property name="styleSheet">
           <string notr="true">QPushButton {
-    
 	background-color: rgb(250, 250, 250);
 	image: url(:/window/minimize.png);
     color: white;
+	padding: 3px;
     border: none;
 }
 
@@ -131,6 +131,7 @@ QPushButton:pressed {
 	background-color: rgb(250, 250, 250);
 	image: url(:/window/maximize.png);
     color: white;
+	padding: 3px;
     border: none;
 }
 
@@ -170,6 +171,7 @@ QPushButton:pressed {
 	background-color: rgb(250, 250, 250);
 	image: url(:/window/close.png);
     color: white;
+	padding: 3px;
     border: none;
 }
 
@@ -333,6 +335,7 @@ QPushButton:pressed {
 	image: url(:/icon/add.png);
     color: white;
     border: none;
+	padding: 5px;
 	font-size: 24px
 }
 
@@ -376,6 +379,7 @@ QPushButton:pressed {
 	image: url(:/icon/image.png);
     color: white;
     border: none;
+	padding: 5px;
 	font-size: 24px
 }
 
@@ -451,6 +455,7 @@ QPushButton:pressed {
 	image: url(:/icon/send.png);
     color: white;
     border: none;
+	padding: 5px;
 	font-size: 24px
 }
 

@@ -36,7 +36,6 @@ MainWindow::MainWindow(QWidget *parent)
 
     // 連接到Server
     connect(socket, &QTcpSocket::connected, this, [=]() {
-        // 創建json對象
         QJsonObject json;
         json["type"] = "name";
         json["content"] = ui->clientName->text();
@@ -54,9 +53,9 @@ MainWindow::MainWindow(QWidget *parent)
     connect(ui->msgEdit, &CustomTextEdit::enterPressed, this, &MainWindow::on_sended);
 
 
-
     // TCP接收事件
     connect(socket, &QTcpSocket::readyRead, this, &MainWindow::on_received);
+
 
     //選擇聯絡人點擊事件
     connect(ui->contacts, &QListView::clicked, this, &MainWindow::onContactsClicked);
@@ -148,8 +147,6 @@ void MainWindow::on_received()
         dst = file_from;//收到來自from的訊息後，自動把下次傳送對象設定為from
 
 
-
-
         file_index = recvMessage("", ":/icon/avatar.png", "receive", file_type, file_from);
 
 
@@ -157,13 +154,13 @@ void MainWindow::on_received()
         if(file_type == "image")
         {
             QJsonObject json;
-            json["type"] = "recv_ack";  // 類型為msg
+            json["type"] = "recv_ack";
             json["from"] = myid;
             json["file_name"] = recv_file_name;
             json["file_size"] = file_size;
-            QJsonDocument doc(json);
-            QByteArray jsonData = doc.toJson(QJsonDocument::Compact);
-            socket->write(jsonData);
+
+            JsonSend(json);
+
             filereceivemode = true;
             offset = 0;
             return;
@@ -182,13 +179,13 @@ void MainWindow::on_received()
         // 根據用戶選擇處理
         if (msgBox.exec() == QMessageBox::Yes) {
             QJsonObject json;
-            json["type"] = "recv_ack";  // 類型為msg
+            json["type"] = "recv_ack";
             json["from"] = myid;
             json["file_name"] = recv_file_name;
             json["file_size"] = file_size;
-            QJsonDocument doc(json);
-            QByteArray jsonData = doc.toJson(QJsonDocument::Compact);
-            socket->write(jsonData);
+
+            JsonSend(json);
+
             filereceivemode = true;
             offset = 0;
 
@@ -330,6 +327,7 @@ QString MainWindow::getSelectedContactId()
      }
 }
 
+
 //切換聊天對象
 void MainWindow::onContactsClicked(){
     dst = getSelectedContactId();
@@ -343,24 +341,22 @@ void MainWindow::onContactsClicked(){
 // 點擊後傳輸檔案
 void MainWindow::onSendFileButtonClicked()
 {
-
-    // 使用 QFileDialog 來選擇檔案
     QString filePath = QFileDialog::getOpenFileName(this, "Choose File", "", "All Files (*.*)");
 
-    if (!filePath.isEmpty()) {
+    if (!filePath.isEmpty())
+    {
         QModelIndex index = sendMessage("", ":/icon/avatar.png", "", "sent", "file", dst);
         sendFileToServer(filePath, "file", index, dst);  // 呼叫檔案傳送函數
     }
 }
 
-
+// 點擊後傳輸圖片
 void MainWindow::onSendImgButtonClicked()
 {
-
-    // 使用 QFileDialog 來選擇檔案
     QString imgPath = QFileDialog::getOpenFileName(this, "Choose Image", "", "All Files (*.*)");
 
-    if (!imgPath.isEmpty()) {
+    if (!imgPath.isEmpty())
+    {
         QModelIndex index = sendMessage("", ":/icon/avatar.png", imgPath, "sent", "image", dst);
         sendFileToServer(imgPath, "image",  index, dst);
     }
@@ -495,7 +491,7 @@ void MainWindow::JsonSend(QJsonObject json){
 
 QJsonObject MainWindow::JsonRecv(QByteArray data)
 {
-    qDebug() << "Received data:" << data;
+    //qDebug() << "Received data:" << data;
 
     // 解析 JSON 數據
     QJsonDocument jsonDoc = QJsonDocument::fromJson(data);

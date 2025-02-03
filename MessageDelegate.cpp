@@ -168,6 +168,22 @@ void DrawBubble(QRect& bubbleRect, QPainter *&painter, QString direction)
     painter->fillPath(path, backgroundColor); // 填充背景顏色
 }
 
+QPixmap scaleImage(QPixmap& img, int maxWidth)
+{
+
+
+    // 根據圖片原始寬高計算縮放比例
+    qreal scaleFactor = static_cast<qreal>(maxWidth) / img.width();
+
+    // 計算縮放後的高度，保持原始比例
+    int scaledHeight = static_cast<int>(img.height() * scaleFactor);
+
+    // 縮放圖片，以寬度為主
+    QPixmap scaledImage = img.scaled(maxWidth, scaledHeight, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+
+    return scaledImage;
+}
+
 
 
 void MessageDelegate::paint(QPainter *painter, const QStyleOptionViewItem &option, const QModelIndex &index) const
@@ -214,19 +230,13 @@ void MessageDelegate::paint(QPainter *painter, const QStyleOptionViewItem &optio
     {
         QPixmap img = index.data(ImageRole).value<QPixmap>();
 
+
         const int maxWidth = bubbleRect.width() * 0.6;
 
-        // 根據圖片原始寬高計算縮放比例
-        qreal scaleFactor = static_cast<qreal>(maxWidth) / img.width();
+        QPixmap scaledImage = scaleImage(img, maxWidth);
 
-        // 計算縮放後的高度，保持原始比例
-        int scaledHeight = static_cast<int>(img.height() * scaleFactor);
-
-        // 縮放圖片，以寬度為主
-        QPixmap scaledImage = img.scaled(maxWidth, scaledHeight, Qt::KeepAspectRatio, Qt::SmoothTransformation);
-
-        // 取得縮放後的寬度
         int scaledWidth = scaledImage.width();
+        int scaledHeight = scaledImage.height();
 
         if(messageDirection == "sent"){
             int origin = itemRect.right() - 10;// - AVATARW;
@@ -305,9 +315,9 @@ QSize MessageDelegate::sizeHint(const QStyleOptionViewItem &option, const QModel
     {
         QPixmap img = index.data(ImageRole).value<QPixmap>();
         // 設定圖片最大尺寸，避免圖片過大
-        const int maxWidth = itemRect.width()*0.7;
-        const int maxHeight = itemRect.width()*0.7;
-        QPixmap scaledImage = img.scaled(maxWidth, maxHeight, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+        const int maxWidth = itemRect.width()*0.6;
+        QPixmap scaledImage = scaleImage(img, maxWidth);
+
 
         // 取得縮放後的寬度與高度
         int scaledWidth = scaledImage.width();
