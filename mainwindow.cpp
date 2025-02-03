@@ -63,6 +63,7 @@ MainWindow::MainWindow(QWidget *parent)
 
     //傳送檔案按鈕的點擊事件
     connect(ui->sendFileButton, &QPushButton::clicked, this, &MainWindow::onSendFileButtonClicked);
+    connect(ui->sendImgButton, &QPushButton::clicked, this, &MainWindow::onSendImgButtonClicked);
 
 
 
@@ -139,12 +140,36 @@ void MainWindow::on_received()
         dst = from;//收到來自from的訊息後，自動把下次傳送對象設定為from
         recvMessage(message, ":/icon/avatar.png", "receive", "text", from);
     }
-    else if(type == "file_recv"){
+    else if(type == "ask_recv"){
         file_from = jsonObj["from"].toString();
         recv_file_name = jsonObj["file_name"].toString();
         file_size = jsonObj["file_size"].toInt();
+        file_type = jsonObj["file_type"].toString();
         dst = file_from;//收到來自from的訊息後，自動把下次傳送對象設定為from
-        file_index = recvMessage("", ":/icon/avatar.png", "receive", "file", file_from);
+
+
+
+
+        file_index = recvMessage("", ":/icon/avatar.png", "receive", file_type, file_from);
+
+
+        //如果是圖片，直接接收
+        if(file_type == "image")
+        {
+            QJsonObject json;
+            json["type"] = "recv_ack";  // 類型為msg
+            json["from"] = myid;
+            json["file_name"] = recv_file_name;
+            json["file_size"] = file_size;
+            QJsonDocument doc(json);
+            QByteArray jsonData = doc.toJson(QJsonDocument::Compact);
+            socket->write(jsonData);
+            filereceivemode = true;
+            offset = 0;
+            return;
+        }
+
+
 
         // 彈出對話框詢問是否接收檔案
         QMessageBox msgBox;
@@ -157,7 +182,7 @@ void MainWindow::on_received()
         // 根據用戶選擇處理
         if (msgBox.exec() == QMessageBox::Yes) {
             QJsonObject json;
-            json["type"] = "file_recv_ack";  // 類型為msg
+            json["type"] = "recv_ack";  // 類型為msg
             json["from"] = myid;
             json["file_name"] = recv_file_name;
             json["file_size"] = file_size;
@@ -172,7 +197,7 @@ void MainWindow::on_received()
             qDebug() << "User refused the file from" << file_from;
         }
     }
-    else if(type == "file_upload_ack"){
+    else if(type == "upload_ack"){
         filesendmode = true;
     }
 }
@@ -195,7 +220,7 @@ void MainWindow::on_sended(){
 
     if (socket->state() == QAbstractSocket::ConnectedState && !myid.isEmpty()) {
         JsonSend(json);
-        sendMessage(ui->msgEdit->toPlainText(), ":/icon/avatar.png", "sent", "text", dst);
+        sendMessage(ui->msgEdit->toPlainText(), ":/icon/avatar.png", "", "sent", "text", dst);
     }
     else
         qDebug() << "Not connected to server!";
@@ -206,7 +231,7 @@ void MainWindow::on_sended(){
 
 
 
-QModelIndex MainWindow::sendMessage(const QString &message, const QString &avatarPath, const QString type, const QString datatype, QString to)
+QModelIndex MainWindow::sendMessage(const QString &message, const QString &avatarPath, const QString &imagePath, const QString type, const QString datatype, QString to)
 {
     if(dst != "")
         ui->current_contact->setText( "#" + to + current_contacts[to] ); //標籤更新成聊天對象名稱
@@ -215,9 +240,10 @@ QModelIndex MainWindow::sendMessage(const QString &message, const QString &avata
     QStandardItem *item = new QStandardItem();
 
     item->setData(message, MessageDelegate::TextRole);
-    item->setData(QPixmap(avatarPath), Qt::DecorationRole);
+    item->setData(QPixmap(avatarPath), MessageDelegate::AvatarRole);
     item->setData(type, MessageDelegate::DirectionTypeRole);
     item->setData(datatype, MessageDelegate::DataTypeRole);
+    item->setData(QPixmap(imagePath), MessageDelegate::ImageRole);
 
     if(!chat_models.contains(to)){
         chat_models[to] = new QStandardItemModel(this);
@@ -246,7 +272,7 @@ QModelIndex MainWindow::recvMessage(const QString &message, const QString &avata
     QStandardItem *item = new QStandardItem();
 
     item->setData(message, MessageDelegate::TextRole);    // 設置消息內容
-    item->setData(QPixmap(avatarPath), Qt::DecorationRole);  // 設置頭像
+    item->setData(QPixmap(avatarPath), MessageDelegate::AvatarRole);  // 設置頭像
     item->setData(type, MessageDelegate::DirectionTypeRole);  // 設置消息類型：sent 或 receive
     item->setData(datatype, MessageDelegate::DataTypeRole);
 
@@ -315,19 +341,33 @@ void MainWindow::onContactsClicked(){
 
 
 // 點擊後傳輸檔案
-void MainWindow::onSendFileButtonClicked() {
+void MainWindow::onSendFileButtonClicked()
+{
 
     // 使用 QFileDialog 來選擇檔案
     QString filePath = QFileDialog::getOpenFileName(this, "Choose File", "", "All Files (*.*)");
 
     if (!filePath.isEmpty()) {
-        QModelIndex index = sendMessage("", ":/icon/avatar.png", "sent", "file", dst);
-        sendFileToServer(filePath, index, dst);  // 呼叫檔案傳送函數
+        QModelIndex index = sendMessage("", ":/icon/avatar.png", "", "sent", "file", dst);
+        sendFileToServer(filePath, "file", index, dst);  // 呼叫檔案傳送函數
+    }
+}
+
+
+void MainWindow::onSendImgButtonClicked()
+{
+
+    // 使用 QFileDialog 來選擇檔案
+    QString imgPath = QFileDialog::getOpenFileName(this, "Choose Image", "", "All Files (*.*)");
+
+    if (!imgPath.isEmpty()) {
+        QModelIndex index = sendMessage("", ":/icon/avatar.png", imgPath, "sent", "image", dst);
+        sendFileToServer(imgPath, "image",  index, dst);
     }
 }
 
 // 傳輸檔案
-void MainWindow::sendFileToServer(const QString &filePath, QModelIndex index, QString to) {
+void MainWindow::sendFileToServer(const QString &filePath, const QString &fileType,  QModelIndex index, QString to) {
     QtConcurrent::run([=]() {
         QFile file(filePath);
         QFileInfo fileInfo(file);
@@ -336,9 +376,11 @@ void MainWindow::sendFileToServer(const QString &filePath, QModelIndex index, QS
         qint64 offset = 0;
 
         QJsonObject json;
-        json["type"] = "file_upload";
+        json["type"] = "upload";
         json["file_name"] = fileName;
         json["file_size"] = fileSize;
+        json["file_type"] = fileType;
+
         dst = getSelectedContactId();
         json["from"] = myid;
         json["to"] = dst;
@@ -406,14 +448,26 @@ void MainWindow::recvFileFromServer(const QByteArray &byteArray, QModelIndex ind
             offset += bytesToWrite;
 
 
+            if(file_type == "file")
+            {
+                // 更新模型中的進度
+                int newProgressValue = static_cast<float>(offset)*100/file_size;
+                chat_models[from]->setData(index, newProgressValue, MessageDelegate::ProgressRole);
+                ui->chatroom->viewport()->update();
+            }
 
-            // 更新模型中的進度
-            int newProgressValue = static_cast<float>(offset)*100/file_size;
-            chat_models[from]->setData(index, newProgressValue, MessageDelegate::ProgressRole);
-            ui->chatroom->viewport()->update();
 
 
             if (offset >= file_size) {
+
+                //接收完成，顯示圖片
+                if(file_type == "image")
+                {
+                    chat_models[from]->setData(index, QPixmap(recv_file_name), MessageDelegate::ImageRole);
+                    ui->chatroom->viewport()->update();
+                }
+
+
                 // 文件接收完成
                 filereceivemode = false;
                 // 如果還有剩餘數據，可以在這裡清空

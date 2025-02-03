@@ -89,12 +89,13 @@ void Responser::process(int client, int len, char *buf)
 
         sendJSON(target_sock, response);
     }
-    else if (type == "file_upload")
+    else if (type == "upload")
     {
         offset = 0;
         file_size = 0;
         file_name = parsedRoot["file_name"].asString();
         file_size = parsedRoot["file_size"].asInt64();
+        file_type = parsedRoot["file_type"].asString(); //"file_recv"or "img_recv"
 
         std::string target_sock_str = parsedRoot["to"].asString();
         std::string source_sock_str = parsedRoot["from"].asString();
@@ -106,13 +107,13 @@ void Responser::process(int client, int len, char *buf)
 
         // 發送回應
         Json::Value response;
-        response["type"] = "file_upload_ack";
+        response["type"] = "upload_ack";
 
         sendJSON(file_src, response);
 
         fileTranferMode = true;
     }
-    else if (type == "file_recv_ack")
+    else if (type == "recv_ack")
     {
         file_size = parsedRoot["file_size"].asInt64();
         std::string file_name = parsedRoot["file_name"].asString();
@@ -158,6 +159,10 @@ void Responser::receiveFile(ssize_t bytesRead, char *buf)
 
 void Responser::sendFileThread(int source_sock, string file_name)
 {
+
+    // const int HEADER_SIZE = 1;
+    const int BUFFER_SIZE = 256 * 1024;
+
     std::ifstream inFile(file_name, std::ios::binary);
     if (!inFile)
     {
@@ -166,8 +171,9 @@ void Responser::sendFileThread(int source_sock, string file_name)
     }
 
     // 讀取檔案並發送給source_sock
-    char buffer[256 * 1024];
-    while (inFile.read(buffer, sizeof(buffer)) || inFile.gcount() > 0)
+    char buffer[BUFFER_SIZE];
+    // buffer[0] = 0x2; // 檔案類型
+    while (inFile.read(buffer, BUFFER_SIZE) || inFile.gcount() > 0)
     {
         ssize_t bytesSent = send(source_sock, buffer, inFile.gcount(), 0);
         if (bytesSent < 0)
@@ -185,9 +191,10 @@ void Responser::notifyFileDownload()
 {
     // 檔案已上傳到Server，通知接收端是否接受檔案
     Json::Value response;
-    response["type"] = "file_recv";
+    response["type"] = "ask_recv";
     response["file_name"] = file_name;
     response["file_size"] = file_size;
+    response["file_type"] = file_type;
     response["from"] = to_string(file_src);
 
     sendJSON(file_dst, response);

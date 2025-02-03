@@ -59,20 +59,21 @@ private:
     QJsonObject JsonRecv(QByteArray data);
 
     QString getSelectedContactId();
-    QModelIndex sendMessage(const QString &message, const QString &avatarPath, const QString type, const QString datatype, QString to);
+    QModelIndex sendMessage(const QString &message, const QString &avatarPath, const QString &imagePath, const QString type, const QString datatype, QString to);
     QModelIndex recvMessage(const QString &message, const QString &avatarPath, const QString type, const QString datatype, QString from);
 
 
-
-
     void onSendFileButtonClicked();
-    void sendFileToServer(const QString &filePath, QModelIndex index, QString to);
+    void onSendImgButtonClicked();
+    void sendFileToServer(const QString &filePath, const QString &fileType,  QModelIndex index, QString to);
     void recvFileFromServer(const QByteArray &byteArray, QModelIndex index, QString from);
     bool filesendmode = false;
     bool filereceivemode = false;
     QString file_from;
+    QString file_type;
     QModelIndex file_index;
     int file_size = 0;
+
     int offset = 0;
     QString recv_file_name;
     QByteArray receiveBuffer;

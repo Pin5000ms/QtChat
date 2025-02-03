@@ -5,6 +5,7 @@
         <file>file.png</file>
         <file>send.png</file>
         <file>add.png</file>
+        <file>image.png</file>
     </qresource>
     <qresource prefix="/style">
         <file>style.qss</file>

@@ -40,6 +40,7 @@ private:
     int64_t offset = 0;
 
     bool fileTranferMode = false;
+    string file_type = "";
     void receiveFile(ssize_t bytesRead, char *buf);
 
     void sendFileThread(int source_sock, string file_name);

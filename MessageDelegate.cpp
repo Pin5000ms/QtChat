@@ -92,19 +92,19 @@ void SetTextBubble(QRect& bubbleRect, QString text, QString direction)
         int origin = itemRect.right() - 10;// - AVATARW;
         bubbleRect.setRight(origin);
 
-        if(textWidth < itemRect.width() * 0.8)
+        if(textWidth < itemRect.width() * 0.7)
             bubbleRect.setLeft(origin - textWidth - 20);
         else
-            bubbleRect.setLeft(origin - itemRect.width() * 0.8);
+            bubbleRect.setLeft(origin - itemRect.width() * 0.7);
     }
     else if (direction == "receive"){
         int origin = itemRect.left() + AVATARW + 10;
         bubbleRect.setLeft(origin);
 
-        if(textWidth < itemRect.width() * 0.8)
+        if(textWidth < itemRect.width() * 0.7)
             bubbleRect.setRight(origin + textWidth + 20);
         else
-            bubbleRect.setRight(origin + itemRect.width() * 0.8);
+            bubbleRect.setRight(origin + itemRect.width() * 0.7);
     }
 
     qDebug()<<"SetTextBubble bubbleRect : "<<bubbleRect.width();
@@ -150,7 +150,7 @@ void DrawProgress(QRect& bubbleRect, QPainter *&painter, int progress)
 
     QRect progressFillRect = progressRect;
     progressFillRect.setLeft(origin);
-    progressFillRect.setRight(origin + progressRect.width() * progress / 100); // 根據進度調整寬度
+    progressFillRect.setRight(origin + (end - origin - 10) * progress / 100); // 根據進度調整寬度
     painter->setBrush(QColor(180, 150, 255, 180)); // 進度條填充顏色
     painter->drawRect(progressFillRect);
 }
@@ -175,7 +175,7 @@ void MessageDelegate::paint(QPainter *painter, const QStyleOptionViewItem &optio
     QString messageDirection = index.data(DirectionTypeRole).toString();// sent or receive
     // 獲取消息內容和頭像
     QString text = index.data(Qt::DisplayRole).toString();
-    QPixmap avatar = index.data(Qt::DecorationRole).value<QPixmap>();
+    QPixmap avatar = index.data(AvatarRole).value<QPixmap>();
     QString dataType = index.data(DataTypeRole).toString();
 
 
@@ -208,6 +208,41 @@ void MessageDelegate::paint(QPainter *painter, const QStyleOptionViewItem &optio
         int progress = index.data(ProgressRole).toInt(); // 取得進度值
         DrawProgress(bubbleRect, painter, progress);
     }
+    else if(dataType == "image")
+    {
+        QPixmap img = index.data(ImageRole).value<QPixmap>();
+
+        const int maxWidth = bubbleRect.width() * 0.6;
+
+        // 根據圖片原始寬高計算縮放比例
+        qreal scaleFactor = static_cast<qreal>(maxWidth) / img.width();
+
+        // 計算縮放後的高度，保持原始比例
+        int scaledHeight = static_cast<int>(img.height() * scaleFactor);
+
+        // 縮放圖片，以寬度為主
+        QPixmap scaledImage = img.scaled(maxWidth, scaledHeight, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+
+        // 取得縮放後的寬度
+        int scaledWidth = scaledImage.width();
+
+        if(messageDirection == "sent"){
+            int origin = itemRect.right() - 10;// - AVATARW;
+            bubbleRect.setRight(origin);
+            bubbleRect.setLeft(origin - scaledWidth);
+        }
+        else if (messageDirection == "receive"){
+            int origin = itemRect.left() + AVATARW + 10;
+            bubbleRect.setLeft(origin);
+            bubbleRect.setRight(origin + scaledWidth);
+        }
+
+
+        bubbleRect.setHeight(scaledHeight);
+
+
+        painter->drawPixmap(bubbleRect, scaledImage);
+    }
 
 
 
@@ -229,10 +264,10 @@ int getRequiredLines(QRect& itemRect, const QString &text) {
     int textWidth = calculateTextWidth(text);
     int maxWidth = 0;
 
-    if(textWidth < itemRect.width() * 0.8)
+    if(textWidth < itemRect.width() * 0.7)
         maxWidth = textWidth + 1;
     else
-        maxWidth = itemRect.width() * 0.8 + 1;
+        maxWidth = itemRect.width() * 0.7 + 1;
 
 
 
@@ -258,11 +293,29 @@ QSize MessageDelegate::sizeHint(const QStyleOptionViewItem &option, const QModel
     QString text = index.data(Qt::DisplayRole).toString();
 
     QString dataType = index.data(DataTypeRole).toString();
+    QRect itemRect = option.rect;
+
+
     if(dataType == "file"){
-        return QSize(option.rect.width(), 120);
+        return QSize(itemRect.width(), 120);
+    }
+    else if(dataType == "image")
+    {
+        QPixmap img = index.data(ImageRole).value<QPixmap>();
+        // 設定圖片最大尺寸，避免圖片過大
+        const int maxWidth = itemRect.width()*0.7;
+        const int maxHeight = itemRect.width()*0.7;
+        QPixmap scaledImage = img.scaled(maxWidth, maxHeight, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+
+        // 取得縮放後的寬度與高度
+        int scaledWidth = scaledImage.width();
+        int scaledHeight = scaledImage.height();
+
+        return QSize(scaledWidth, scaledHeight);
     }
 
-    QRect itemRect = option.rect;
+
+
     int requiredLines = getRequiredLines(itemRect, text);
 
 
