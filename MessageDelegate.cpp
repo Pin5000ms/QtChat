@@ -150,7 +150,9 @@ void DrawProgress(QRect& bubbleRect, QPainter *&painter, int progress)
 
     QRect progressFillRect = progressRect;
     progressFillRect.setLeft(origin);
-    progressFillRect.setRight(origin + (end - origin - 10) * progress / 100); // 根據進度調整寬度
+
+
+    progressFillRect.setRight(origin + (end - origin) * static_cast<float>(progress) / 100); // 根據進度調整寬度
     painter->setBrush(QColor(180, 150, 255, 180)); // 進度條填充顏色
     painter->drawRect(progressFillRect);
 }

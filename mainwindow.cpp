@@ -409,7 +409,8 @@ void MainWindow::sendFileToServer(const QString &filePath, const QString &fileTy
 
 
                 // 更新模型中的進度
-                int newProgressValue = offset*100/fileSize;
+                int newProgressValue = static_cast<float>(offset)*100/fileSize;
+                newProgressValue = qMin(newProgressValue, 100); // 最後一個chunk可能小於CHUNK_SIZE，確保不超過 100%
                 chat_models[to]->setData(index, newProgressValue, MessageDelegate::ProgressRole);
                 ui->chatroom->viewport()->update();
 
@@ -452,6 +453,7 @@ void MainWindow::recvFileFromServer(const QByteArray &byteArray, QModelIndex ind
             {
                 // 更新模型中的進度
                 int newProgressValue = static_cast<float>(offset)*100/file_size;
+                newProgressValue = qMin(newProgressValue, 100); // 最後一個chunk可能小於CHUNK_SIZE，確保不超過 100%
                 chat_models[from]->setData(index, newProgressValue, MessageDelegate::ProgressRole);
                 ui->chatroom->viewport()->update();
             }
